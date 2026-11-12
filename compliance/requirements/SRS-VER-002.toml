@@ -1,0 +1,13 @@
+id = "SRS-VER-002"
+type = "requirement"
+title = "Manifest and COMPLETE"
+status = "draft"
+release = "v0.2"
+text = """
+Writes a sha256sum -c compatible manifest and run.json, then COMPLETE last.
+"""
+verification = "Integration, checked with sha256sum -c"
+
+[links]
+allocated_to = ["SWI-JOURNAL"]
+mitigates = ["HAZ-003"]

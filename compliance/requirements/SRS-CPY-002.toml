@@ -1,0 +1,13 @@
+id = "SRS-CPY-002"
+type = "requirement"
+title = "No foreign overwrite"
+status = "draft"
+release = "v0.2"
+text = """
+Never overwrites a destination file it did not write; a differing file is a conflict and fails that file.
+"""
+verification = "Integration"
+
+[links]
+allocated_to = ["SWI-COPY"]
+mitigates = ["HAZ-006"]

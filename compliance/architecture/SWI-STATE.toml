@@ -1,0 +1,9 @@
+id = "SWI-STATE"
+type = "software-item"
+title = "Live state and events"
+status = "draft"
+safety_class = "A"
+paths = ["src/state/"]
+description = """
+Versioned state.json snapshot and events.jsonl stream for monitoring; not a risk control on its own.
+"""

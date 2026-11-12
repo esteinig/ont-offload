@@ -1,0 +1,9 @@
+id = "SWI-LOG"
+type = "software-item"
+title = "Logging"
+status = "draft"
+safety_class = "B"
+paths = ["src/logging.rs"]
+description = """
+fern console (stderr) and file logging, RFC 3339 UTC timestamps, text or JSON lines, escaped control characters.
+"""

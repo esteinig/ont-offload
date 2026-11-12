@@ -1,0 +1,9 @@
+id = "SWI-CLI"
+type = "software-item"
+title = "Command-line interface and exit codes"
+status = "draft"
+safety_class = "B"
+paths = ["src/main.rs", "src/cli.rs", "src/error.rs", "src/lib.rs"]
+description = """
+clap CLI, dispatch and mapping of errors to documented exit codes.
+"""

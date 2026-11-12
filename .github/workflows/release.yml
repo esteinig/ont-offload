@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Compute the version and run the gates without tagging or publishing
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  MEDTRACE_VERSION: "0.6.0"
+  MEDTRACE_REPOSITORY: "esteinig/medtrace"
+
+jobs:
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release only from main
+        run: |
+          [ "${{ github.ref_name }}" = "main" ] || { echo "Run the Release workflow on main"; exit 1; }
+
+  ci:
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+
+  prepare:
+    name: prepare
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - uses: cocogitto/cocogitto-action@v3 # pin to a commit SHA
+        with:
+          check: false
+      - uses: ./.github/actions/setup-medtrace
+        with:
+          version: ${{ env.MEDTRACE_VERSION }}
+          repository: ${{ env.MEDTRACE_REPOSITORY }}
+      - id: version
+        run: echo "version=$(cog bump --auto --dry-run | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+      - name: Release gate, baseline and records
+        run: medtrace release prepare --version "${{ steps.version.outputs.version }}" --out release-records
+      - uses: actions/upload-artifact@v4 # pin to a commit SHA
+        with:
+          name: release-records
+          path: release-records
+      - name: Bump, changelog and tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cog bump --auto
+          git push --follow-tags origin main
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  os: ubuntu-latest }
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm }
+          - { target: aarch64-apple-darwin,      os: macos-latest }
+          - { target: x86_64-pc-windows-msvc,    os: windows-latest }
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+          targets: ${{ matrix.target }}
+      - if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p ont-offload -p ont-runsim
+      - name: Package
+        shell: bash
+        run: |
+          v="v${{ needs.prepare.outputs.version }}"
+          for bin in ont-offload ont-runsim; do
+            dir="${bin}-${v}-${{ matrix.target }}"
+            mkdir -p "$dir"
+            ext=""; [[ "${{ matrix.target }}" == *windows* ]] && ext=".exe"
+            cp "target/${{ matrix.target }}/release/${bin}${ext}" "$dir/"
+            cp LICENSE README.md "$dir/"
+            if [[ "$ext" == ".exe" ]]; then 7z a "${dir}.zip" "$dir" >/dev/null; else tar -czf "${dir}.tar.gz" "$dir"; fi
+          done
+      - uses: actions/upload-artifact@v4 # pin to a commit SHA
+        with:
+          name: dist-${{ matrix.target }}
+          path: |
+            *.tar.gz
+            *.zip
+
+  publish:
+    name: publish
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - uses: actions/download-artifact@v4 # pin to a commit SHA
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4 # pin to a commit SHA
+        with:
+          name: release-records
+          path: release-records
+      - name: Records archive and checksums
+        run: |
+          v="v${{ needs.prepare.outputs.version }}"
+          tar -czf "dist/release-records-${v}.tar.gz" release-records
+          cd dist && sha256sum *.tar.gz *.zip > SHA256SUMS
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          v="v${{ needs.prepare.outputs.version }}"
+          gh release create "$v" --title "$v" --notes-from-tag --verify-tag \
+            dist/*.tar.gz dist/*.zip dist/SHA256SUMS
+      - name: Back-merge main into dev
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          v="v${{ needs.prepare.outputs.version }}"
+          gh pr create --base dev --head main --title "chore(release): back-merge $v into dev" \
+            --body "Back-merge of release $v from main into dev." || echo "Back-merge PR already open"
+
+  docs:
+    needs: publish
+    uses: ./.github/workflows/docs.yml

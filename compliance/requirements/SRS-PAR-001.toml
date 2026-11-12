@@ -1,0 +1,13 @@
+id = "SRS-PAR-001"
+type = "requirement"
+title = "Parallel workers"
+status = "draft"
+release = "v0.3"
+text = """
+Runs the configured number of parallel workers.
+"""
+verification = "Unit"
+
+[links]
+allocated_to = ["SWI-SCHED"]
+mitigates = []

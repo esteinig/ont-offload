@@ -1,0 +1,30 @@
+name: Feature request
+description: New behaviour; becomes one or more SRS items
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Need
+      description: The problem to solve and who has it.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable statements; each becomes an SRS requirement ("ont-offload shall ...").
+    validations:
+      required: true
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety impact
+      options:
+        - None
+        - Affects data integrity or completeness
+        - Affects source data retention or deletion
+        - Affects visibility of failures
+        - Unsure
+    validations:
+      required: true

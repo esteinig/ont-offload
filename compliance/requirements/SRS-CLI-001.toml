@@ -1,0 +1,13 @@
+id = "SRS-CLI-001"
+type = "requirement"
+title = "Subcommands"
+status = "draft"
+release = "v0.1"
+text = """
+Provides the subcommands watch, run, verify, status, check-config, bench and cleanup; a command not yet implemented exits with code 1 and names its planned release.
+"""
+verification = "Unit: parse every subcommand; integration: unimplemented command message"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = []

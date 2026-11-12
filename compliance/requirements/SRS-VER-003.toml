@@ -1,0 +1,13 @@
+id = "SRS-VER-003"
+type = "requirement"
+title = "Verify command"
+status = "draft"
+release = "v0.2"
+text = """
+verify re-hashes a run against its manifest and exits non-zero on any difference.
+"""
+verification = "Integration"
+
+[links]
+allocated_to = ["SWI-CLI", "SWI-JOURNAL"]
+mitigates = ["HAZ-002"]

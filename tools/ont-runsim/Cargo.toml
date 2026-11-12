@@ -1,0 +1,29 @@
+[package]
+name = "ont-runsim"
+description = "Simulates MinKNOW sequencing runs on disk to test ONT run offload (test tool)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "ont_runsim"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ont-runsim"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { version = "4", features = ["derive", "wrap_help"] }
+thiserror = "2"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"

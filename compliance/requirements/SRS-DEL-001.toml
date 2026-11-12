@@ -1,0 +1,13 @@
+id = "SRS-DEL-001"
+type = "requirement"
+title = "Deletion off by default"
+status = "draft"
+release = "v0.5"
+text = """
+Deletes nothing unless delete is on; in dry-run reports per-run gate results and deletes nothing.
+"""
+verification = "Integration"
+
+[links]
+allocated_to = ["SWI-CLEANUP"]
+mitigates = ["HAZ-009"]

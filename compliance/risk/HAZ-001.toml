@@ -1,0 +1,13 @@
+id = "HAZ-001"
+type = "hazard"
+title = "Data written somewhere other than the share"
+status = "draft"
+cause = "Unmounted share, wrong share, path inside source, repointed symlink"
+harm = "Run appears offloaded; analysed copy missing or partial"
+severity = "serious"
+probability_before = "occasional"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-CFG-001", "SRS-CFG-002", "SRS-GRD-001", "SRS-GRD-002", "SRS-GRD-003", "SRS-SEL-002", "SRS-SEL-004", "SRS-RES-006"]

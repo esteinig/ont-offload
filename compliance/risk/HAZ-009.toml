@@ -1,0 +1,13 @@
+id = "HAZ-009"
+type = "hazard"
+title = "Source deleted before a verified copy exists"
+status = "draft"
+cause = "Deletion enabled with insufficient checks"
+harm = "Unrecoverable data loss; repeat sample needed"
+severity = "critical"
+probability_before = "remote"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-VER-004", "SRS-DEL-001", "SRS-DEL-002", "SRS-DEL-003", "SRS-DEL-004"]

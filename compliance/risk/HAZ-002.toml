@@ -1,0 +1,13 @@
+id = "HAZ-002"
+type = "hazard"
+title = "Corrupted file accepted"
+status = "draft"
+cause = "Network, client cache or server fault"
+harm = "Wrong reads or variants reported"
+severity = "critical"
+probability_before = "remote"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-VER-001", "SRS-VER-003", "SRS-VER-004"]

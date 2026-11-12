@@ -1,0 +1,13 @@
+id = "SRS-CLI-003"
+type = "requirement"
+title = "Invalid input"
+status = "draft"
+release = "v0.1"
+text = """
+Rejects unknown subcommands and invalid options with a usage message on stderr and exit code 2.
+"""
+verification = "Integration test"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = []

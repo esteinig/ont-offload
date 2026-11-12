@@ -1,0 +1,33 @@
+name: Setup medtrace
+description: Install a pinned medtrace release and verify its checksum.
+inputs:
+  version:
+    description: medtrace release version (without the leading v)
+    required: true
+  repository:
+    description: OWNER/REPO publishing medtrace releases
+    required: true
+  token:
+    description: Token with read access to the medtrace release repository (needed if it is private)
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Download and verify medtrace
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        VERSION: ${{ inputs.version }}
+        REPO: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        target="x86_64-unknown-linux-gnu"
+        asset="medtrace-v${VERSION}-${target}.tar.gz"
+        dir="$RUNNER_TEMP/medtrace"
+        mkdir -p "$dir"
+        gh release download "v${VERSION}" --repo "$REPO" --pattern "$asset" --pattern SHA256SUMS --dir "$dir"
+        (cd "$dir" && grep " ${asset}\$" SHA256SUMS | sha256sum -c -)
+        tar -xzf "$dir/$asset" -C "$dir"
+        install -m 0755 "$(find "$dir" -type f -name medtrace | head -n1)" /usr/local/bin/medtrace
+        medtrace --version

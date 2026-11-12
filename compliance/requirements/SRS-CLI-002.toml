@@ -1,0 +1,13 @@
+id = "SRS-CLI-002"
+type = "requirement"
+title = "Help and version"
+status = "draft"
+release = "v0.1"
+text = """
+Prints usage with --help and the package version with --version, exiting 0.
+"""
+verification = "Integration tests"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = []

@@ -1,0 +1,13 @@
+id = "HAZ-003"
+type = "hazard"
+title = "Incomplete run treated as complete"
+status = "draft"
+cause = "Late files, failed files, premature completion marker"
+harm = "Reduced sensitivity, missed finding"
+severity = "critical"
+probability_before = "occasional"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-SEL-006", "SRS-LIVE-003", "SRS-VER-002"]

@@ -1,0 +1,13 @@
+id = "SRS-DEL-002"
+type = "requirement"
+title = "Deletion gates"
+status = "draft"
+release = "v0.5"
+text = """
+Deletes a run's source files only when the run is complete, delete_after has passed, the configured gate passes against the manifest, the guard passes, and every source file matches its journal record and hash.
+"""
+verification = "One test per failing gate; simulator runs"
+
+[links]
+allocated_to = ["SWI-CLEANUP"]
+mitigates = ["HAZ-009"]

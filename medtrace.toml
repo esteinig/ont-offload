@@ -1,0 +1,50 @@
+# medtrace configuration for ont-offload (IEC 62304 traceability).
+# Hand-written in the layout of `medtrace ai scaffold rust`; run `medtrace check`
+# once medtrace is installed and align any key it reports.
+
+[project]
+name = "ont-offload"
+prefix = "OOF"
+scheme = "iec62304-ed1"
+description = "Verified offload of ONT sequencing runs to mounted network storage"
+register = "compliance"
+
+[scan]
+language = "rust"
+paths = ["src", "tests"]
+# tools/ont-runsim is a test tool outside the medical software and is not scanned.
+implements_tag = "Implements:"
+verifies_tag = "Verifies:"
+
+[check]
+untagged_tests = "error"
+unallocated_requirements = "error"
+unverified_requirements = "warn"
+
+[results]
+# JUnit reports written by `cargo xtask test` (nextest profiles unit and integration).
+paths = ["target/nextest/unit/junit-unit.xml", "target/nextest/integration/junit-integration.xml"]
+
+[gates.pr]
+require_tagged_tests = true
+require_passing_results = true
+
+[gates.release]
+require_approved_items = true
+require_reviewed_soup = true
+require_verified_requirements = true
+
+[risk.matrix]
+severity = ["negligible", "minor", "serious", "critical", "catastrophic"]
+probability = ["improbable", "remote", "occasional", "probable", "frequent"]
+acceptable = [
+  ["negligible", "*"],
+  ["minor", "improbable"], ["minor", "remote"], ["minor", "occasional"],
+  ["serious", "improbable"], ["serious", "remote"],
+  ["critical", "improbable"],
+]
+
+[ai]
+# Optional: provider for `medtrace ai ...` proposals. Proposed items always need human acceptance.
+provider = ""
+model = ""

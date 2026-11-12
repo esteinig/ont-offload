@@ -1,0 +1,19 @@
+[profile.default]
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[profile.unit]
+default-filter = "kind(lib) | kind(bin)"
+[profile.unit.junit]
+path = "junit-unit.xml"
+
+[profile.integration]
+default-filter = "kind(test)"
+[profile.integration.junit]
+path = "junit-integration.xml"
+
+[profile.ci]
+fail-fast = false
+retries = 0
+[profile.ci.junit]
+path = "junit.xml"

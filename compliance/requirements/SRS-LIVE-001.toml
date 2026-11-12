@@ -1,0 +1,13 @@
+id = "SRS-LIVE-001"
+type = "requirement"
+title = "Stable files only"
+status = "draft"
+release = "v0.3"
+text = """
+Copies a file only after its size and mtime are stable for settle.
+"""
+verification = "Simulator with growing files"
+
+[links]
+allocated_to = ["SWI-RUN"]
+mitigates = ["HAZ-005"]

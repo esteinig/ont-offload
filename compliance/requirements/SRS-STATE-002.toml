@@ -1,0 +1,13 @@
+id = "SRS-STATE-002"
+type = "requirement"
+title = "Event stream"
+status = "draft"
+release = "v0.4"
+text = """
+Appends one schema-valid event per state change to events.jsonl.
+"""
+verification = "Integration"
+
+[links]
+allocated_to = ["SWI-STATE"]
+mitigates = ["HAZ-007"]

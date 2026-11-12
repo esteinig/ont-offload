@@ -1,0 +1,13 @@
+id = "SRS-RATE-001"
+type = "requirement"
+title = "Rate limit"
+status = "draft"
+release = "v0.3"
+text = """
+Keeps total throughput of all workers within rate_limit plus at most one burst; warns above 90% of network_speed and refuses to start above 100%.
+"""
+verification = "Unit on simulated clock"
+
+[links]
+allocated_to = ["SWI-SCHED"]
+mitigates = []

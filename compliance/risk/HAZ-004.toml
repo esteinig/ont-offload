@@ -1,0 +1,13 @@
+id = "HAZ-004"
+type = "hazard"
+title = "Partial file visible under final name"
+status = "draft"
+cause = "Crash or dropout mid-write"
+harm = "Truncated input to analysis"
+severity = "serious"
+probability_before = "occasional"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-CPY-001", "SRS-RES-004"]

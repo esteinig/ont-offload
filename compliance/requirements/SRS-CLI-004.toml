@@ -1,0 +1,13 @@
+id = "SRS-CLI-004"
+type = "requirement"
+title = "Exit codes"
+status = "draft"
+release = "v0.1"
+text = """
+Exits with 0 (done), 1 (internal), 2 (configuration or guard refused), 3 (files or runs failed), 4 (integrity mismatch), 75 (restart needed) or 130 (interrupted).
+"""
+verification = "Unit + integration"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = ["HAZ-007"]

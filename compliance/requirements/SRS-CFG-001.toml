@@ -1,0 +1,13 @@
+id = "SRS-CFG-001"
+type = "requirement"
+title = "Path validation"
+status = "draft"
+release = "v0.1"
+text = """
+Refuses to start when any configured path is empty, relative, contains a control character, has leading or trailing whitespace, is not valid UTF-8, or does not exist, and names the key with the value escaped.
+"""
+verification = "Unit: table of bad values including a single BEL byte (P2I-00569 regression)"
+
+[links]
+allocated_to = ["SWI-CONFIG"]
+mitigates = ["HAZ-001", "HAZ-008"]

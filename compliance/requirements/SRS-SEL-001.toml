@@ -1,0 +1,13 @@
+id = "SRS-SEL-001"
+type = "requirement"
+title = "Selection and structure"
+status = "draft"
+release = "v0.2"
+text = """
+Selects files by include and exclude globs relative to the run folder and preserves the relative directory structure at the destination.
+"""
+verification = "Unit + property test"
+
+[links]
+allocated_to = ["SWI-RUN"]
+mitigates = ["HAZ-008"]

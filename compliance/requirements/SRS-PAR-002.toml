@@ -1,0 +1,13 @@
+id = "SRS-PAR-002"
+type = "requirement"
+title = "Bench"
+status = "draft"
+release = "v0.4"
+text = """
+bench measures write throughput per stream count and suggests workers and rate_limit values.
+"""
+verification = "Integration on tempdir"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = []

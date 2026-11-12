@@ -1,0 +1,49 @@
+# Cocogitto: Conventional Commits and SemVer for ont-offload.
+tag_prefix = "v"
+branch_whitelist = ["main"]
+ignore_merge_commits = true
+skip_untracked = false
+
+pre_bump_hooks = [
+  "cargo xtask set-version {{version}}",
+  "cargo xtask ci",
+]
+post_bump_hooks = []
+
+[git_hooks.commit-msg]
+script = """#!/bin/sh
+set -e
+cog verify --file $1
+"""
+
+[git_hooks.pre-commit]
+script = """#!/bin/sh
+set -e
+cargo xtask lint
+"""
+
+[git_hooks.pre-push]
+script = """#!/bin/sh
+set -e
+cargo xtask test --unit
+"""
+
+[commit_types]
+feat = { changelog_title = "Features" }
+fix = { changelog_title = "Bug fixes" }
+perf = { changelog_title = "Performance" }
+docs = { changelog_title = "Documentation", omit_from_changelog = false }
+refactor = { changelog_title = "Refactoring" }
+test = { changelog_title = "Tests", omit_from_changelog = true }
+build = { changelog_title = "Build", omit_from_changelog = true }
+ci = { changelog_title = "CI", omit_from_changelog = true }
+chore = { changelog_title = "Chores", omit_from_changelog = true }
+compliance = { changelog_title = "Compliance" }
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "ont-offload"
+owner = "esteinig"
+authors = [{ signature = "Eike Steinig", username = "esteinig" }]

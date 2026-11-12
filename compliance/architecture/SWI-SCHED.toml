@@ -1,0 +1,9 @@
+id = "SWI-SCHED"
+type = "software-item"
+title = "Scheduler and resilience"
+status = "draft"
+safety_class = "B"
+paths = ["src/sched/"]
+description = """
+Work queue, worker pool, shared rate limiter, pause and retry, long-outage handling, stall detection.
+"""

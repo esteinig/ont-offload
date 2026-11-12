@@ -1,0 +1,13 @@
+id = "SRS-RES-003"
+type = "requirement"
+title = "Stall detection"
+status = "draft"
+release = "v0.3"
+text = """
+Detects a worker with no progress for stall_timeout and reports it.
+"""
+verification = "Fault test: blocking write"
+
+[links]
+allocated_to = ["SWI-SCHED"]
+mitigates = ["HAZ-007"]

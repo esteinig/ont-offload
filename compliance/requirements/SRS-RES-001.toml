@@ -1,0 +1,13 @@
+id = "SRS-RES-001"
+type = "requirement"
+title = "Error classes"
+status = "draft"
+release = "v0.3"
+text = """
+Classifies I/O errors as transient, capacity, permanent or integrity and acts per class.
+"""
+verification = "Unit over errno table"
+
+[links]
+allocated_to = ["SWI-SCHED"]
+mitigates = ["HAZ-007"]

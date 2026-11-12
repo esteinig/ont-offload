@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include patient data, sample names or identifiers.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `ont-offload --version`
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Expected and actual behaviour, with steps to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and state
+      description: Relevant log lines, `ont-offload status --json` output, exit code.
+      render: text
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety impact
+      options:
+        - None
+        - Data could be incomplete at the destination
+        - Data could be corrupted at the destination
+        - Data could be written to the wrong place
+        - Source data could be lost
+        - Transfer stalled without a visible error
+        - Unsure
+    validations:
+      required: true
+  - type: input
+    id: refs
+    attributes:
+      label: Related requirements
+      description: SRS or HAZ ids if known

@@ -1,0 +1,13 @@
+id = "SRS-STATE-001"
+type = "requirement"
+title = "State snapshot"
+status = "draft"
+release = "v0.4"
+text = """
+Publishes a schema-valid state.json atomically at the configured interval.
+"""
+verification = "Integration + schema check"
+
+[links]
+allocated_to = ["SWI-STATE"]
+mitigates = ["HAZ-007"]

@@ -1,0 +1,26 @@
+[Unit]
+Description=ont-offload: verified offload of ONT sequencing runs
+Documentation=https://esteinig.github.io/ont-offload
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/ont-offload watch --config /etc/ont-offload/config.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=30
+# 75 = restart needed after an outage; restart it.
+RestartForceExitStatus=75
+# 2 = configuration refused; do not loop.
+RestartPreventExitStatus=2
+WatchdogSec=120
+TimeoutStopSec=60
+StateDirectory=ont-offload
+LogsDirectory=ont-offload
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+[Install]
+WantedBy=multi-user.target

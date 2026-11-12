@@ -1,0 +1,13 @@
+id = "SRS-GRD-002"
+type = "requirement"
+title = "Guard before commit"
+status = "draft"
+release = "v0.2"
+text = """
+Re-checks the guard before each commit and stops all writes within one chunk when it fails.
+"""
+verification = "Fault test: sentinel removed mid-copy"
+
+[links]
+allocated_to = ["SWI-GUARD", "SWI-SCHED"]
+mitigates = ["HAZ-001"]

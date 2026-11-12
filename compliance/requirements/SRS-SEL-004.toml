@@ -1,0 +1,13 @@
+id = "SRS-SEL-004"
+type = "requirement"
+title = "Symlinks not followed"
+status = "draft"
+release = "v0.2"
+text = """
+Does not follow symlinks inside a run; skips them and lists them in run.json and state.
+"""
+verification = "Integration: links to files, folders and other mounts"
+
+[links]
+allocated_to = ["SWI-RUN"]
+mitigates = ["HAZ-001"]

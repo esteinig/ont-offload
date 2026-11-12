@@ -1,0 +1,13 @@
+id = "SRS-GRD-001"
+type = "requirement"
+title = "Destination guard"
+status = "draft"
+release = "v0.2"
+text = """
+Writes nothing to the destination unless the sentinel content matches target_id, the filesystem type is allowed and the device differs from the source.
+"""
+verification = "Integration: missing sentinel, wrong id, same device"
+
+[links]
+allocated_to = ["SWI-GUARD"]
+mitigates = ["HAZ-001"]

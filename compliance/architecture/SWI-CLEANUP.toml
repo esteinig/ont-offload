@@ -1,0 +1,9 @@
+id = "SWI-CLEANUP"
+type = "software-item"
+title = "Gated source deletion"
+status = "draft"
+safety_class = "B"
+paths = ["src/cleanup.rs"]
+description = """
+Deletes source runs only when every deletion gate passes. Risk control for HAZ-009.
+"""

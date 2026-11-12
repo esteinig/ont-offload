@@ -1,0 +1,13 @@
+id = "SRS-CFG-003"
+type = "requirement"
+title = "Strict configuration"
+status = "draft"
+release = "v0.1"
+text = """
+Rejects unknown configuration keys and invalid sizes, rates and durations.
+"""
+verification = "Unit"
+
+[links]
+allocated_to = ["SWI-CONFIG"]
+mitigates = ["HAZ-008"]

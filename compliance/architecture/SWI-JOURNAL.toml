@@ -1,0 +1,9 @@
+id = "SWI-JOURNAL"
+type = "software-item"
+title = "Journal, manifest and receipts"
+status = "draft"
+safety_class = "B"
+paths = ["src/journal/"]
+description = """
+Append-only journal for resume; per-run manifest.sha256, run.json, COMPLETE marker and VERIFIED.json receipt.
+"""

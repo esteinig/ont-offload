@@ -1,0 +1,13 @@
+id = "SRS-GRD-003"
+type = "requirement"
+title = "Re-resolved destination"
+status = "draft"
+release = "v0.2"
+text = """
+Re-resolves the real path of dest_root before each commit and pauses writes if it differs from the path recorded at start-up.
+"""
+verification = "Fault test: symlink repointed mid-run"
+
+[links]
+allocated_to = ["SWI-GUARD"]
+mitigates = ["HAZ-001"]

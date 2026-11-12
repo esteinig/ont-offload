@@ -1,0 +1,13 @@
+id = "SRS-LIVE-003"
+type = "requirement"
+title = "Run completion"
+status = "draft"
+release = "v0.3"
+text = """
+Marks a run complete only after a completion marker, settle_after_complete with no changes, and a reconciliation in which every selected file is committed.
+"""
+verification = "Simulator: late file after final_summary"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-JOURNAL"]
+mitigates = ["HAZ-003"]

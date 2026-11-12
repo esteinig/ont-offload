@@ -1,0 +1,13 @@
+id = "HAZ-005"
+type = "hazard"
+title = "Copy of a file still being written"
+status = "draft"
+cause = "Live MinKNOW output"
+harm = "Truncated input to analysis"
+severity = "serious"
+probability_before = "probable"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-LIVE-001", "SRS-LIVE-002"]

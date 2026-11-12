@@ -1,0 +1,13 @@
+id = "SRS-SEL-006"
+type = "requirement"
+title = "Run detection"
+status = "draft"
+release = "v0.2"
+text = """
+Detects runs below source.root by the configured layout and run_markers (default MinKNOW layout and sample sheet), ignores nested runs and ignored folders, and lists detected runs with the matching marker in check-config.
+"""
+verification = "Simulator layouts including runs without a sample sheet"
+
+[links]
+allocated_to = ["SWI-RUN"]
+mitigates = ["HAZ-003"]

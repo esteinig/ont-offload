@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  MEDTRACE_VERSION: "0.6.0"            # pinned medtrace release
+  MEDTRACE_REPOSITORY: "esteinig/medtrace"  # OWNER/REPO publishing medtrace releases
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2 # pin to a commit SHA
+      - run: cargo xtask lint
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2 # pin to a commit SHA
+      - uses: taiki-e/install-action@v2 # pin to a commit SHA
+        with:
+          tool: cargo-nextest
+      - run: cargo xtask test
+      - uses: actions/upload-artifact@v4 # pin to a commit SHA
+        if: always()
+        with:
+          name: junit
+          path: target/nextest/**/junit-*.xml
+          if-no-files-found: error
+
+  msrv-and-targets:
+    name: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2 # pin to a commit SHA
+      - run: cargo build --workspace --locked
+
+  trace:
+    name: trace
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4 # pin to a commit SHA
+        with:
+          name: junit
+          path: target/nextest
+      - uses: ./.github/actions/setup-medtrace
+        with:
+          version: ${{ env.MEDTRACE_VERSION }}
+          repository: ${{ env.MEDTRACE_REPOSITORY }}
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - name: Traceability gate
+        run: |
+          gate=pr
+          if [ "${{ github.base_ref }}" = "main" ] || [ "${{ github.ref_name }}" = "main" ]; then gate=release; fi
+          cargo xtask trace --strict --gate "$gate"
+      - name: Annotate and comment impact
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          medtrace gh annotate
+          medtrace gh impact --pr "${{ github.event.pull_request.number }}" --comment
+
+  supply-chain:
+    name: supply-chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - uses: EmbarkStudios/cargo-deny-action@v2 # pin to a commit SHA
+      - uses: ./.github/actions/setup-medtrace
+        with:
+          version: ${{ env.MEDTRACE_VERSION }}
+          repository: ${{ env.MEDTRACE_REPOSITORY }}
+      - name: SOUP in sync with Cargo.lock
+        run: cargo xtask soup
+      - uses: taiki-e/install-action@v2 # pin to a commit SHA
+        with:
+          tool: cargo-cyclonedx
+      - run: cargo xtask sbom
+      - uses: actions/upload-artifact@v4 # pin to a commit SHA
+        with:
+          name: sbom
+          path: "**/sbom.cdx.json"
+
+  conventions:
+    name: conventions
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+        with:
+          fetch-depth: 0
+      - name: Branch name
+        env:
+          HEAD: ${{ github.head_ref }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" = "main" ]; then
+            [ "$HEAD" = "dev" ] || [[ "$HEAD" =~ ^(release|hotfix)/ ]] || { echo "PRs into main come from dev, release/* or hotfix/*"; exit 1; }
+          else
+            [[ "$HEAD" =~ ^(feat|fix|docs|compliance|chore|ci|test|refactor|perf|build)/[a-z0-9._-]+$ ]] || [[ "$HEAD" =~ ^release/ ]] || { echo "Branch '$HEAD' must be <type>/<topic>"; exit 1; }
+          fi
+      - uses: cocogitto/cocogitto-action@v3 # pin to a commit SHA
+        with:
+          check: false
+      - name: PR title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: cog verify "$TITLE"
+      - name: Commits since base
+        run: cog check "origin/${{ github.base_ref }}..HEAD"
+      - uses: ./.github/actions/setup-medtrace
+        with:
+          version: ${{ env.MEDTRACE_VERSION }}
+          repository: ${{ env.MEDTRACE_REPOSITORY }}
+      - name: Refs trailers
+        run: medtrace commits check --range "origin/${{ github.base_ref }}..HEAD" --require-refs
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: taiki-e/install-action@v2 # pin to a commit SHA
+        with:
+          tool: mdbook
+      - run: mdbook build docs

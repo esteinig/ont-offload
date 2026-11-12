@@ -1,0 +1,13 @@
+id = "SRS-VER-001"
+type = "requirement"
+title = "In-flight hashing"
+status = "draft"
+release = "v0.2"
+text = """
+Computes SHA-256 of each file while copying and checks the written size; with verify set to readback, also re-reads the destination and compares digests.
+"""
+verification = "Fault tests: short write; bit flip with readback on"
+
+[links]
+allocated_to = ["SWI-COPY"]
+mitigates = ["HAZ-002"]

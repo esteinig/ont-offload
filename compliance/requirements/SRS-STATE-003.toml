@@ -1,0 +1,13 @@
+id = "SRS-STATE-003"
+type = "requirement"
+title = "Outage state"
+status = "draft"
+release = "v0.4"
+text = """
+Reports outage start, duration, reason, level, next check, backlog and source free space in state, emits outage events, and runs notify_command for each if set.
+"""
+verification = "Integration + schema check"
+
+[links]
+allocated_to = ["SWI-STATE"]
+mitigates = ["HAZ-007"]

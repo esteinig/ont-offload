@@ -1,0 +1,14 @@
+[package]
+name = "xtask"
+description = "Development tasks for ont-offload (cargo xtask)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Standard library only, so xtask builds before anything else and adds no SOUP.
+[dependencies]

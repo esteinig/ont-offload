@@ -1,0 +1,13 @@
+id = "SRS-SEL-002"
+type = "requirement"
+title = "No escape"
+status = "draft"
+release = "v0.2"
+text = """
+Never maps a file outside dest_root (no .., absolute path or escaping symlink).
+"""
+verification = "Property test"
+
+[links]
+allocated_to = ["SWI-RUN"]
+mitigates = ["HAZ-001"]

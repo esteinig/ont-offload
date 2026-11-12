@@ -1,0 +1,13 @@
+id = "SRS-CFG-002"
+type = "requirement"
+title = "Containment and device"
+status = "draft"
+release = "v0.1"
+text = """
+Refuses to start when source and destination contain each other after resolving symlinks, or are on the same device.
+"""
+verification = "Unit + integration with symlinks"
+
+[links]
+allocated_to = ["SWI-CONFIG"]
+mitigates = ["HAZ-001"]

@@ -1,0 +1,13 @@
+id = "SRS-SEL-005"
+type = "requirement"
+title = "Odd file names"
+status = "draft"
+release = "v0.2"
+text = """
+Logs file names with control characters as escaped warnings, and fails only that file when the share cannot store its name.
+"""
+verification = "Unit + Samba nightly test"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-COPY"]
+mitigates = []

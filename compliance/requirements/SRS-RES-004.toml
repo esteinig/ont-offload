@@ -1,0 +1,13 @@
+id = "SRS-RES-004"
+type = "requirement"
+title = "Resume after restart"
+status = "draft"
+release = "v0.2"
+text = """
+Resumes after restart from the journal without re-copying committed unchanged files, and removes its own stale temp files.
+"""
+verification = "Integration: kill and restart"
+
+[links]
+allocated_to = ["SWI-JOURNAL"]
+mitigates = ["HAZ-004"]

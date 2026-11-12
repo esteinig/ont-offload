@@ -1,0 +1,13 @@
+id = "SRS-LIVE-002"
+type = "requirement"
+title = "Source changed during copy"
+status = "draft"
+release = "v0.2"
+text = """
+Discards a copy whose source changed during the copy and requeues the file.
+"""
+verification = "Fault test: append during copy"
+
+[links]
+allocated_to = ["SWI-COPY"]
+mitigates = ["HAZ-005"]

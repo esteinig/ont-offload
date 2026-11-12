@@ -1,0 +1,13 @@
+id = "SRS-VER-004"
+type = "requirement"
+title = "Verified receipt"
+status = "draft"
+release = "v0.2"
+text = """
+verify writes VERIFIED.json with the manifest digest, file count, bytes, host and time only when every file matches.
+"""
+verification = "Integration: clean run and one corrupted file"
+
+[links]
+allocated_to = ["SWI-JOURNAL"]
+mitigates = ["HAZ-002", "HAZ-009"]

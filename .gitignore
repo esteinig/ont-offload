@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+/docs/book
+/lcov.info
+/coverage
+/sbom*.json
+/*.profraw
+.DS_Store
+.idea/
+.vscode/

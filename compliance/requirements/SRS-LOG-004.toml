@@ -1,0 +1,13 @@
+id = "SRS-LOG-004"
+type = "requirement"
+title = "Outage logging"
+status = "draft"
+release = "v0.3"
+text = """
+Logs an outage as one start line, a summary every log_every and one end line with duration and backlog, never one line per retry.
+"""
+verification = "Unit on fake clock"
+
+[links]
+allocated_to = ["SWI-LOG"]
+mitigates = ["HAZ-007"]

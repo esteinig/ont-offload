@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.rs diff=rust
+Cargo.lock linguist-generated=true -diff
+CHANGELOG.md merge=union

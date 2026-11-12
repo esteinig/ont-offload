@@ -1,0 +1,13 @@
+id = "HAZ-008"
+type = "hazard"
+title = "Needed files not selected or misconfigured"
+status = "draft"
+cause = "Selection config missing a needed type; invisible characters in config"
+harm = "Missing data for analysis or re-basecalling"
+severity = "serious"
+probability_before = "occasional"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-LOG-003", "SRS-CFG-001", "SRS-CFG-003", "SRS-SEL-001", "SRS-SEL-003"]

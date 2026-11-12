@@ -1,0 +1,13 @@
+id = "SRS-DEL-004"
+type = "requirement"
+title = "Stop on failure"
+status = "draft"
+release = "v0.5"
+text = """
+Stops deleting a run at the first failed check, raises an alert, and never deletes during an outage.
+"""
+verification = "Fault test: share drops mid-cleanup"
+
+[links]
+allocated_to = ["SWI-CLEANUP"]
+mitigates = ["HAZ-009"]

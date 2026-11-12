@@ -1,0 +1,13 @@
+id = "SRS-CPY-001"
+type = "requirement"
+title = "Atomic commit"
+status = "draft"
+release = "v0.2"
+text = """
+Writes to a temporary name and renames to the final name only after the size and source checks pass.
+"""
+verification = "Fault test: crash before rename"
+
+[links]
+allocated_to = ["SWI-COPY"]
+mitigates = ["HAZ-004"]

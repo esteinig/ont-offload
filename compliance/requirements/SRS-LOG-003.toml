@@ -1,0 +1,13 @@
+id = "SRS-LOG-003"
+type = "requirement"
+title = "Committed-file logging"
+status = "draft"
+release = "v0.2"
+text = """
+Logs each committed file with run id, path, size, digest and duration, and escapes control characters in all messages.
+"""
+verification = "Unit"
+
+[links]
+allocated_to = ["SWI-LOG"]
+mitigates = ["HAZ-008"]

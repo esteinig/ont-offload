@@ -1,0 +1,13 @@
+id = "HAZ-006"
+type = "hazard"
+title = "Another run's data overwritten"
+status = "draft"
+cause = "Name collision, misconfiguration"
+harm = "Wrong patient's data analysed"
+severity = "critical"
+probability_before = "remote"
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-CPY-002"]

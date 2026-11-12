@@ -1,0 +1,13 @@
+id = "SRS-SEL-003"
+type = "requirement"
+title = "Excluded files reported"
+status = "draft"
+release = "v0.2"
+text = """
+Reports excluded files per run in run.json and state.
+"""
+verification = "Integration"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-STATE"]
+mitigates = ["HAZ-008"]

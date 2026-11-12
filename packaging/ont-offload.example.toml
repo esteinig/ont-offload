@@ -1,0 +1,61 @@
+# /etc/ont-offload/config.toml  (example; see the user guide for every setting)
+
+dest_root = "/mnt/nas/ont"
+target_id = "CHANGE-ME"          # must match dest_root/.ont-offload-target
+state_dir = "/var/lib/ont-offload"
+
+[source]
+root = "/data"
+layout = "minknow"               # or "any-depth"
+run_markers = ["sample_sheet_*.csv"]
+complete_markers = ["final_summary_*.txt"]
+ignore = ["lost+found", "**/.*", "ont-runsim"]
+
+[selection]
+include = ["**"]
+exclude = ["**/.*", "**/*.tmp"]
+defer_until_complete = ["sequencing_summary_*.txt", "other_reports/**"]
+
+[bandwidth]
+# How many files are copied at the same time.
+workers = 4
+# Maximum total transfer speed for all workers together, e.g. "100MB/s" or "800Mbit/s".
+rate_limit = "100MB/s"
+# Optional: your network connection speed; used only to check rate_limit.
+network_speed = "1Gbit/s"
+
+[transfer]
+chunk_size = "8MiB"
+verify = "inflight"              # or "readback"
+on_existing = "fail"             # or "hash"
+settle = "30s"
+settle_after_complete = "5m"
+stall_timeout = "120s"
+max_attempts = 3
+min_free = "500GiB"
+preserve_mtime = true
+file_mode = "0640"
+
+[outage]
+check_every_max = "5m"
+warn_after = "10m"
+alert_after = "1h"
+remind_every = "1h"
+log_every = "15m"
+stable_before_resume = "60s"
+source_free_alert = "200GB"
+notify_command = ""
+
+[cleanup]
+delete = "off"                   # "off", "dry-run" or "on"
+gate = "storage-verify"          # or "readback" or "both"
+delete_after = "7d"
+rehash_source = true
+only_when_free_below = "always"
+
+[guard]
+allowed_fstypes = ["nfs", "nfs4", "cifs", "smb3"]
+
+[logging]
+file = "/var/log/ont-offload/ont-offload.log"
+format = "text"                  # or "json"

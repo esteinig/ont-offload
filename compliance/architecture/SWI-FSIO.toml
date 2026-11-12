@@ -1,0 +1,9 @@
+id = "SWI-FSIO"
+type = "software-item"
+title = "Filesystem abstraction"
+status = "draft"
+safety_class = "B"
+paths = ["src/fsio/"]
+description = """
+The Fs trait over every filesystem call; RealFs for production and FaultyFs for fault injection in tests.
+"""

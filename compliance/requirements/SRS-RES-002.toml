@@ -1,0 +1,13 @@
+id = "SRS-RES-002"
+type = "requirement"
+title = "Pause and resume"
+status = "draft"
+release = "v0.3"
+text = """
+On transient errors pauses all workers and resumes automatically when the guard passes, with backoff capped at check_every_max.
+"""
+verification = "Fault test: EIO burst, ESTALE"
+
+[links]
+allocated_to = ["SWI-SCHED"]
+mitigates = ["HAZ-007"]

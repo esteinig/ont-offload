@@ -1,0 +1,9 @@
+id = "SWI-GUARD"
+type = "software-item"
+title = "Destination guard"
+status = "draft"
+safety_class = "B"
+paths = ["src/guard.rs"]
+description = """
+Proves the destination is the intended share before every commit: sentinel, filesystem type, device id, re-resolved real path, free space.
+"""

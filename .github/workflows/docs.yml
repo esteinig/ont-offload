@@ -1,0 +1,49 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  MEDTRACE_VERSION: "0.6.0"
+  MEDTRACE_REPOSITORY: "esteinig/medtrace"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: taiki-e/install-action@v2 # pin to a commit SHA
+        with:
+          tool: mdbook
+      - uses: ./.github/actions/setup-medtrace
+        with:
+          version: ${{ env.MEDTRACE_VERSION }}
+          repository: ${{ env.MEDTRACE_REPOSITORY }}
+      - name: Lifecycle documents
+        run: medtrace doc build all --out docs/src/lifecycle
+      - run: mdbook build docs
+      - uses: actions/upload-pages-artifact@v3 # pin to a commit SHA
+        with:
+          path: docs/book
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4 # pin to a commit SHA

@@ -1,0 +1,13 @@
+id = "SRS-DEL-003"
+type = "requirement"
+title = "Listed files only"
+status = "draft"
+release = "v0.5"
+text = """
+Deletes only files listed in the manifest, records each in deletions.jsonl before removing it, and writes DELETED.json to the destination run.
+"""
+verification = "Integration: extra and excluded files stay"
+
+[links]
+allocated_to = ["SWI-CLEANUP"]
+mitigates = ["HAZ-009"]

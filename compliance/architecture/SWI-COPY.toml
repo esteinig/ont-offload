@@ -1,0 +1,9 @@
+id = "SWI-COPY"
+type = "software-item"
+title = "Copy engine"
+status = "draft"
+safety_class = "B"
+paths = ["src/copy/"]
+description = """
+Per-file copy with in-flight SHA-256, size check, optional read-back and atomic rename. Risk control for HAZ-002, HAZ-004.
+"""

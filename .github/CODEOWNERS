@@ -1,0 +1,6 @@
+# Default owner for everything
+*                   @esteinig
+# Register and risk changes need the owner's review
+/compliance/        @esteinig
+/medtrace.toml      @esteinig
+/.github/           @esteinig

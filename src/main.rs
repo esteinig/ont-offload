@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//! ont-offload binary: parse arguments, set up logging, run, map errors to exit codes.
+
+use std::process::ExitCode;
+
+use clap::Parser;
+use ont_offload::cli::Cli;
+use ont_offload::error::exit;
+
+/// Implements: SRS-CLI-003, SRS-CLI-004
+fn main() -> ExitCode {
+    let cli = Cli::parse(); // usage errors exit with code 2 (clap)
+
+    if let Err(e) = ont_offload::logging::init(
+        cli.global.log_level.into(),
+        cli.global.log_file.as_deref(),
+        cli.global.log_format,
+    ) {
+        eprintln!("ont-offload: {e}");
+        return ExitCode::from(e.exit_code());
+    }
+
+    log::info!(
+        "ont-offload {} starting: {}",
+        env!("CARGO_PKG_VERSION"),
+        cli.command.name()
+    );
+    match ont_offload::execute(&cli.command) {
+        Ok(()) => ExitCode::from(exit::OK),
+        Err(e) => {
+            log::error!("{e}");
+            ExitCode::from(e.exit_code())
+        }
+    }
+}

@@ -1,0 +1,9 @@
+id = "SWI-RUN"
+type = "software-item"
+title = "Run discovery, selection and lifecycle"
+status = "draft"
+safety_class = "B"
+paths = ["src/run/"]
+description = """
+Detects runs by layout and markers, selects files by globs, maps paths, and drives each run through live, settling, reconciling, finalising.
+"""

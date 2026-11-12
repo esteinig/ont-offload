@@ -1,0 +1,13 @@
+id = "SRS-RES-006"
+type = "requirement"
+title = "Start during outage"
+status = "draft"
+release = "v0.3"
+text = """
+In watch mode, starts in the outage state when the share is missing at start-up, but refuses to start when the sentinel names a different target.
+"""
+verification = "Integration: start with share absent, then mount"
+
+[links]
+allocated_to = ["SWI-CLI", "SWI-GUARD"]
+mitigates = ["HAZ-001", "HAZ-007"]

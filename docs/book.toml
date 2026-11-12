@@ -1,0 +1,13 @@
+[book]
+title = "ont-offload"
+authors = ["Eike Steinig"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/esteinig/ont-offload"
+edit-url-template = "https://github.com/esteinig/ont-offload/edit/dev/docs/{path}"
