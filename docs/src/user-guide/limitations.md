@@ -2,15 +2,23 @@
 
 Every known limitation of the current release is listed here with the hazard it relates to, what controls it today, and the control planned for a later release. Limitations that are already controlled are listed too, because the control is often a rule for the operator or leaves a remainder worth knowing. Hazards and requirements are in [`compliance/`](https://github.com/esteinig/ont-offload/tree/dev/compliance); the planned versions follow the [staged plan](../developer-guide/architecture.md#staged-implementation-plan).
 
-Status as of v0.4.
+Status as of v0.5.
 
 ## Open: controls planned
 
 | Limitation | Hazard | Controlled today by | Planned control |
 | --- | --- | --- | --- |
-| **Memory and scan-time bounds are not yet shown on real data.** Completed runs are dropped from memory, journals are compacted and rescans list only changed folders (see below), but this is verified on the fake clock with a few runs, not over days with hundreds of runs. | HAZ-013 (minor) | SRS-RES-008, SRS-RES-009 (v0.4); SRS-RES-003: the watchdog and the stall exit (75) restart a daemon that hangs; SRS-RES-004: a restart resumes without copying again. | 72 h soak with memory and scan-time bounds over 200 runs (v0.5). |
+| **Memory and scan-time bounds are not yet shown on real data.** Completed runs are dropped from memory, journals are compacted and rescans list only changed folders. The v0.5 fake-clock soak runs 72 h with 200 runs and holds at most ten runs at once, but real file systems and real run sizes are not part of it. | HAZ-013 (minor) | SRS-RES-008, SRS-RES-009; SRS-RES-003: the watchdog and the stall exit (75) restart a daemon that hangs; SRS-RES-004: a restart resumes without copying again. | The 72 h site soak on the staging share (release gate). |
+| **Deletion is final, and the receipt is trusted.** With `gate = "storage-verify"`, a `VERIFIED.json` with the right digest, counts and time opens the gate; ont-offload does not check who wrote it. | HAZ-009 (critical) | SRS-DEL-001 to 006: off by default, four gates, a record of every file before it is removed, `DELETED.json`, never during an outage. **Operator rule:** run `delete = "dry-run"` for two weeks and review `cleanup-reports.jsonl` before `on`; only let the receiving side's verification write `VERIFIED.json`; use `gate = "both"` where the share is not trusted. | Residual risk set after the dry-run review (release gate). |
 | **A change to a run after `watch_completed_for` is noticed only at the next start.** Completed runs are watched for 24 h by default, then forgotten. | HAZ-012 (serious) | SRS-RES-004: at every start, a completed run whose files changed is withdrawn and offloaded again. **Operator rule:** raise `watch_completed_for` if runs are re-processed later than a day after they finish, or restart the service after re-processing an old run. | None planned; the window is a setting. |
 | **The nightly NFS and Samba test has not run on GitHub yet.** | HAZ-007 | SRS-RES-005 is verified on a fake clock and by a local tmpfs rehearsal. | The first nightly run closes the gap. |
+
+## Controlled in v0.5
+
+| Limitation in v0.4 | Hazard | Control in v0.5 | What remains |
+| --- | --- | --- | --- |
+| **No source cleanup**: runs stayed on the sequencer until removed by hand, with no record tying the deletion to a verified copy. | HAZ-009 (critical) | SRS-DEL-001 to 006: `[cleanup]` with dry-run, gates (finished, share present, storage-verify or readback, source unchanged), `deletions.jsonl`, `DELETED.json`, the hourly pass in `watch` and `cleanup` by hand. See [Deleting offloaded runs](cleanup.md). | See the open row above. |
+| **The 72 h soak over hundreds of runs was not done.** | HAZ-013 (minor) | The fake-clock soak in CI: 72 h, 200 runs, hourly storage-side verification and cleanup, every run exact, memory bounded. | Real data: see the open row above. |
 
 ## Controlled in v0.4: limitations of v0.3 and how they are handled now
 
@@ -37,3 +45,7 @@ These four limitations were open in v0.3. Each now has a control in the software
 | `notify_command` runs without a shell and is killed after 60 s. | none | By design: give a script path and arguments; the script does its own sending. |
 | Stopping or killing the process discards the file being copied. | HAZ-004 | SRS-CPY-001, SRS-RES-004: temp files never appear under final names; the next start removes them and resumes. |
 | `watch --until-idle` exits at once when no run is found. | none | Operational: start it after the run folder exists. |
+| `cleanup` (deleting) by hand refuses while `watch` runs. | none | SRS-DEL-006: by design, one process per `state_dir`; `watch` deletes every hour. `cleanup --dry-run` works beside `watch` but writes no report. |
+| A run is deleted at the earliest once it is no longer watched (`watch_completed_for`) and `delete_after` has passed. | HAZ-009 | SRS-DEL-006. `check-config` warns when `delete_after` is shorter than `watch_completed_for`. |
+| A run marker reappearing at the path of a deleted run is not offloaded. | HAZ-007 | SRS-DEL-006: a `run_failed` alert names the journal to move away to offload it. |
+| `deletions.jsonl` and `cleanup-reports.jsonl` grow without limit. | none | By design: they are the record of what was deleted and why. Archive them with the other site records. |

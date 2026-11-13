@@ -68,4 +68,4 @@ With `sample` or `run`, two runs can map to the same folder (two experiments wit
 ont-offload verify /mnt/nas/ont/exp1/s1/RUN [--source]
 ```
 
-`verify` re-hashes every file against `manifest.sha256`, reports missing, changed and extra files, and checks that `COMPLETE` is present. With `--source` it also re-hashes the source run named in `run.json`. Only when everything matches does it write `VERIFIED.json` (result, manifest digest, files, bytes, host, time); otherwise it exits with 4. `VERIFIED.json` is the receipt that gated source deletion (v0.5) will require.
+`verify` re-hashes every file against `manifest.sha256`, reports missing, changed and extra files, and checks that `COMPLETE` is present. With `--source` it also re-hashes the source run named in `run.json`. Only when everything matches does it write `VERIFIED.json` (result, manifest digest, files, bytes, host, time); otherwise it exits with 4. `VERIFIED.json` is the receipt that gated source deletion requires with `gate = "storage-verify"` (see [Deleting offloaded runs](cleanup.md)).
