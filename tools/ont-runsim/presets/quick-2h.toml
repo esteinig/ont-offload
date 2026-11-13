@@ -1,0 +1,18 @@
+# Two simulated hours in two minutes, small files. For a quick end-to-end check.
+seed = 1
+hours = 2.0
+speed = 60.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 0.01            # 500MB pod5 batches become 5MB
+
+[synthetic]
+batch_every = "10m"
+
+[[runs]]
+experiment = "runsim_quick"
+sample = "sample01"
+position = "1A"

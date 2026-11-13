@@ -1,0 +1,29 @@
+# Two PromethION positions for 24 hours in real time with realistic batch sizes
+# (about 6 GB per hour per run). Check free space: keep_free applies.
+seed = 24
+hours = 24.0
+speed = 1.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 1.0
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "500MB"
+fastq_pass_batch = "40MB"
+fastq_fail_batch = "5MB"
+barcodes = 12
+
+[[runs]]
+experiment = "runsim_promethion"
+sample = "pool_a"
+position = "1A"
+
+[[runs]]
+experiment = "runsim_promethion"
+sample = "pool_b"
+position = "2A"
+start_after = "30m"
