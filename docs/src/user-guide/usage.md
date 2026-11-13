@@ -6,7 +6,7 @@
 | `ont-offload run <path> [--completed]` | One run in the foreground until complete or failed | v0.2 |
 | `ont-offload verify <run> [--source]` | Re-hash a destination run against its manifest; writes `VERIFIED.json` | v0.2 |
 | `ont-offload status [--json]` | Print the live-state snapshot | v0.4 |
-| `ont-offload check-config` | Validate config, paths, detected runs and the destination guard | v0.2 |
+| `ont-offload check-config` | Validate config and paths, print the effective settings (v0.1); detected runs and the destination guard (v0.2) | v0.1 |
 | `ont-offload bench` | Measure the share; suggest `workers` and `rate_limit` | v0.4 |
 | `ont-offload cleanup [--dry-run] [<run>]` | Gated deletion of offloaded source runs | v0.5 |
 
