@@ -9,5 +9,5 @@ Detects runs below source.root by the configured layout and run_markers (default
 verification = "Simulator layouts including runs without a sample sheet"
 
 [links]
-allocated_to = ["SWI-RUN"]
+allocated_to = ["SWI-RUN", "SWI-CLI"]
 mitigates = ["HAZ-003"]

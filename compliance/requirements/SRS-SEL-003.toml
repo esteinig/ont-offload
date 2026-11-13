@@ -4,7 +4,7 @@ title = "Excluded files reported"
 status = "draft"
 release = "v0.2"
 text = """
-Reports excluded files per run in run.json and state.
+Reports excluded files per run in run.json (and in the state snapshot from v0.4).
 """
 verification = "Integration"
 

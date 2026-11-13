@@ -7,6 +7,9 @@ harm = "Truncated input to analysis"
 severity = "serious"
 probability_before = "occasional"
 # Residual probability is set when the risk controls are verified.
+# v0.2 review: all controls (SRS-CPY-001, SRS-RES-004) are implemented and verified
+# (failed rename, kill and resume, stale temps). Proposed residual probability
+# "improbable"; to be confirmed by the risk owner before setting.
 probability_after = ""
 
 [links]

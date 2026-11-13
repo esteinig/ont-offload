@@ -9,5 +9,5 @@ Writes a sha256sum -c compatible manifest and run.json, then COMPLETE last.
 verification = "Integration, checked with sha256sum -c"
 
 [links]
-allocated_to = ["SWI-JOURNAL"]
+allocated_to = ["SWI-JOURNAL", "SWI-RUN"]
 mitigates = ["HAZ-003"]

@@ -9,5 +9,5 @@ Logs each committed file with run id, path, size, digest and duration, and escap
 verification = "Unit"
 
 [links]
-allocated_to = ["SWI-LOG"]
+allocated_to = ["SWI-LOG", "SWI-RUN"]
 mitigates = ["HAZ-008"]

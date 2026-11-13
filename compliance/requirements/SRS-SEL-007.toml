@@ -1,0 +1,13 @@
+id = "SRS-SEL-007"
+type = "requirement"
+title = "Destination base level"
+status = "draft"
+release = "v0.2"
+text = """
+Maps each run to the destination by dest_starts_at (experiment, sample or run): the destination path keeps the source path from that MinKNOW level down. The mapping never leaves dest_root, a run whose path has too few levels is refused, and each destination run folder is claimed by exactly one source run in the state folder, so a second run that maps to the same destination (a collision, typically from the sample or run level) fails before any file is written. Changing dest_starts_at for a run that was already started is refused.
+"""
+verification = "Unit and property tests of the mapping at every level; claim collision between two runs; integration: check-config lists the destinations"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-JOURNAL"]
+mitigates = ["HAZ-006"]

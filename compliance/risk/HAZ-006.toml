@@ -2,12 +2,15 @@ id = "HAZ-006"
 type = "hazard"
 title = "Another run's data overwritten"
 status = "draft"
-cause = "Name collision, misconfiguration"
+cause = "Name collision (including two runs mapped to one folder by dest_starts_at), misconfiguration"
 harm = "Wrong patient's data analysed"
 severity = "critical"
 probability_before = "remote"
 # Residual probability is set when the risk controls are verified.
+# v0.2 review: all controls (SRS-CPY-002, SRS-SEL-007) are implemented and verified
+# (foreign file conflict, claim collision, mapping property test). Proposed
+# residual probability "improbable"; to be confirmed by the risk owner.
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-CPY-002"]
+controlled_by = ["SRS-CPY-002", "SRS-SEL-007"]

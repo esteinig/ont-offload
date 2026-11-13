@@ -4,7 +4,7 @@ title = "Symlinks not followed"
 status = "draft"
 release = "v0.2"
 text = """
-Does not follow symlinks inside a run; skips them and lists them in run.json and state.
+Does not follow symlinks inside a run; skips them and lists them in run.json (and in the state snapshot from v0.4).
 """
 verification = "Integration: links to files, folders and other mounts"
 

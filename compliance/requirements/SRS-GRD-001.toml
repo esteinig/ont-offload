@@ -9,5 +9,5 @@ Writes nothing to the destination unless the sentinel content matches target_id,
 verification = "Integration: missing sentinel, wrong id, same device"
 
 [links]
-allocated_to = ["SWI-GUARD"]
+allocated_to = ["SWI-GUARD", "SWI-CLI"]
 mitigates = ["HAZ-001"]

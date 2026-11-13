@@ -7,6 +7,9 @@ harm = "Wrong reads or variants reported"
 severity = "critical"
 probability_before = "remote"
 # Residual probability is set when the risk controls are verified.
+# v0.2 review: all controls (SRS-VER-001, -003, -004) are implemented and verified
+# (read-back bit-flip, verify with a corrupted file). Proposed residual
+# probability "improbable"; to be confirmed by the risk owner before setting.
 probability_after = ""
 
 [links]
