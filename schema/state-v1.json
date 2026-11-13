@@ -1,0 +1,599 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/esteinig/ont-offload/schema/state-v1.json",
+  "title": "ont-offload live state (state.json), version 1",
+  "description": "Rewritten atomically every state.interval by `ont-offload watch`. Fields may be added within version 1; a reader must ignore fields it does not know. Removing or changing a field raises schema_version.",
+  "$defs": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "started",
+        "destination_ok",
+        "run_discovered",
+        "run_state_changed",
+        "file_committed",
+        "file_failed",
+        "integrity_mismatch",
+        "run_complete",
+        "run_reopened",
+        "run_failed",
+        "run_retired",
+        "paused",
+        "resumed",
+        "guard_failed",
+        "capacity_low",
+        "capacity_ok",
+        "outage_started",
+        "outage_summary",
+        "outage_warning",
+        "outage_alert",
+        "outage_reminder",
+        "outage_recovering",
+        "outage_ended",
+        "worker_stalled",
+        "source_space_low",
+        "source_space_ok"
+      ],
+      "description": "Event kind, as in events.jsonl."
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "level",
+        "since",
+        "run",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/kind"
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "warning",
+            "error"
+          ]
+        },
+        "since": {
+          "type": "string",
+          "description": "When it was raised (RFC 3339)."
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Run path below the source root, if about a run."
+        },
+        "message": {
+          "type": "string",
+          "description": "What happened."
+        }
+      }
+    },
+    "outage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "since",
+        "duration_s",
+        "reason",
+        "level",
+        "checks",
+        "next_check_s",
+        "recovering",
+        "backlog_files",
+        "backlog_bytes",
+        "stuck_workers"
+      ],
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "When it started (RFC 3339)."
+        },
+        "duration_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds since it started."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Last error."
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "notice",
+            "warning",
+            "alert"
+          ]
+        },
+        "checks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Failed checks so far."
+        },
+        "next_check_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds until the next check."
+        },
+        "recovering": {
+          "type": "boolean",
+          "description": "The last check passed; waiting for stable_before_resume."
+        },
+        "backlog_files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files waiting."
+        },
+        "backlog_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes waiting."
+        },
+        "stuck_workers": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Workers with no progress for stall_timeout."
+        }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker",
+        "run",
+        "task",
+        "bytes",
+        "bytes_total",
+        "idle_s",
+        "stalled"
+      ],
+      "properties": {
+        "worker": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Worker index."
+        },
+        "run": {
+          "type": "string",
+          "description": "Run path below the source root."
+        },
+        "task": {
+          "type": "string",
+          "description": "File (relative to the run) or task."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes written so far."
+        },
+        "bytes_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "File size, for a copy."
+        },
+        "idle_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds since the last progress."
+        },
+        "stalled": {
+          "type": "boolean",
+          "description": "No progress for stall_timeout."
+        }
+      }
+    },
+    "failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "reason"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Path relative to the run."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why."
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "name",
+        "source",
+        "destination",
+        "phase",
+        "files",
+        "bytes",
+        "committed_files",
+        "backlog_files",
+        "backlog_bytes",
+        "copying",
+        "failed",
+        "integrity_mismatches",
+        "skipped",
+        "eta_s",
+        "complete_marker",
+        "manifest_sha256",
+        "error"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "description": "Run id (journal)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Run path below the source root."
+        },
+        "source": {
+          "type": "string",
+          "description": "Source folder."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Destination folder."
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "claiming",
+            "withdrawing",
+            "live",
+            "settling",
+            "reconciling",
+            "finalising",
+            "complete",
+            "failed"
+          ]
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Selected files."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Selected bytes."
+        },
+        "committed_files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files committed as they are now."
+        },
+        "backlog_files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files waiting."
+        },
+        "backlog_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes waiting."
+        },
+        "copying": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files being copied."
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/failed"
+          }
+        },
+        "integrity_mismatches": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Copies that did not match and were retried."
+        },
+        "skipped": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Symlinks and special files, not copied."
+        },
+        "eta_s": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Seconds until the backlog is copied at the current speed."
+        },
+        "complete_marker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Complete marker, if present."
+        },
+        "manifest_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Manifest digest once complete."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why the run cannot be completed."
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "tool_version",
+    "host",
+    "pid",
+    "started_at",
+    "updated_at",
+    "interval_s",
+    "status",
+    "target_id",
+    "source_root",
+    "destination",
+    "source_free_bytes",
+    "workers",
+    "rate",
+    "totals",
+    "runs",
+    "alerts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ont-offload/state/v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "tool_version": {
+      "type": "string",
+      "description": "ont-offload version."
+    },
+    "host": {
+      "type": "string",
+      "description": "Host name."
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Process id."
+    },
+    "started_at": {
+      "type": "string",
+      "description": "When watch started (RFC 3339)."
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "When this snapshot was written (RFC 3339)."
+    },
+    "interval_s": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Snapshot interval; older than three intervals (at least 30 s) is stale."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "running",
+        "outage",
+        "stopping"
+      ]
+    },
+    "target_id": {
+      "type": "string",
+      "description": "Destination target id."
+    },
+    "source_root": {
+      "type": "string",
+      "description": "Source root."
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "fstype",
+        "status",
+        "guard_ok",
+        "free_bytes",
+        "outage"
+      ],
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Destination root."
+        },
+        "fstype": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "File system type."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "ok",
+            "unavailable"
+          ]
+        },
+        "guard_ok": {
+          "type": "boolean",
+          "description": "The last guard check passed."
+        },
+        "free_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Free bytes on the share."
+        },
+        "outage": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/outage"
+            }
+          ]
+        }
+      }
+    },
+    "source_free_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Free bytes on the source."
+    },
+    "workers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "paused",
+        "busy"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Configured workers."
+        },
+        "paused": {
+          "type": "boolean",
+          "description": "Paused by an outage."
+        },
+        "busy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/worker"
+          }
+        }
+      }
+    },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "limit_bytes_per_s",
+        "current_bytes_per_s"
+      ],
+      "properties": {
+        "limit_bytes_per_s": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Total rate limit (null: none)."
+        },
+        "current_bytes_per_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Committed over the last minute."
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "committed_files",
+        "committed_bytes",
+        "failed_files",
+        "completed_runs",
+        "failed_runs",
+        "reopened_runs",
+        "outages",
+        "stalls"
+      ],
+      "properties": {
+        "committed_files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files committed."
+        },
+        "committed_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes committed."
+        },
+        "failed_files": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Files failed for good."
+        },
+        "completed_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs completed."
+        },
+        "failed_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs that cannot be completed."
+        },
+        "reopened_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Completed runs offloaded again."
+        },
+        "outages": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Outages."
+        },
+        "stalls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Stalls."
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/alert"
+      }
+    }
+  }
+}

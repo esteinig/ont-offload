@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/esteinig/ont-offload/schema/event-v1.json",
+  "title": "ont-offload event (one line of events.jsonl), version 1",
+  "description": "Appended for every state change by `ont-offload watch`; the file is rotated to events.jsonl.1 at state.events_max_size. Fields may be added within version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "seq",
+    "ts",
+    "kind",
+    "level",
+    "run",
+    "file",
+    "message",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ont-offload/event/v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sequence number, from 1 at each start."
+    },
+    "ts": {
+      "type": "string",
+      "description": "Time (RFC 3339)."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "started",
+        "destination_ok",
+        "run_discovered",
+        "run_state_changed",
+        "file_committed",
+        "file_failed",
+        "integrity_mismatch",
+        "run_complete",
+        "run_reopened",
+        "run_failed",
+        "run_retired",
+        "paused",
+        "resumed",
+        "guard_failed",
+        "capacity_low",
+        "capacity_ok",
+        "outage_started",
+        "outage_summary",
+        "outage_warning",
+        "outage_alert",
+        "outage_reminder",
+        "outage_recovering",
+        "outage_ended",
+        "worker_stalled",
+        "source_space_low",
+        "source_space_ok"
+      ]
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "run": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Run path below the source root."
+    },
+    "file": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "File relative to the run."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable message, control characters escaped."
+    },
+    "data": {
+      "type": "object",
+      "description": "Kind-specific details."
+    }
+  }
+}

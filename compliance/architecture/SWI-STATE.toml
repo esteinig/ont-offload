@@ -2,8 +2,8 @@ id = "SWI-STATE"
 type = "software-item"
 title = "Live state and events"
 status = "draft"
-safety_class = "A"
+safety_class = "B"
 paths = ["src/state/"]
 description = """
-Versioned state.json snapshot and events.jsonl stream for monitoring; not a risk control on its own.
+Versioned state.json snapshot, events.jsonl stream with rotation, notify_command and the status text. Class B: the snapshot, events and alerts are part of the risk controls for silent stalls (HAZ-007) and delayed runs (HAZ-011).
 """
