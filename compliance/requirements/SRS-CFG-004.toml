@@ -1,0 +1,13 @@
+id = "SRS-CFG-004"
+type = "requirement"
+title = "Configuration check report"
+status = "draft"
+release = "v0.1"
+text = """
+check-config reports every configuration problem at once, each naming its key, exits with code 2 when there is any, and otherwise prints the effective settings (resolved paths, devices, workers, total and per-worker rate) and all warnings.
+"""
+verification = "Unit + integration (binary)"
+
+[links]
+allocated_to = ["SWI-CONFIG", "SWI-CLI"]
+mitigates = ["HAZ-008"]

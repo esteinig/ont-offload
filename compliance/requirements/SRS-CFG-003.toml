@@ -4,7 +4,7 @@ title = "Strict configuration"
 status = "draft"
 release = "v0.1"
 text = """
-Rejects unknown configuration keys and invalid sizes, rates and durations.
+Rejects unknown configuration keys, unknown option values and invalid sizes, rates, durations, patterns and limits; sizes and rates need explicit units (KB, MB, GB, KiB, MiB, GiB, MB/s, Mbit/s, Gbit/s).
 """
 verification = "Unit"
 

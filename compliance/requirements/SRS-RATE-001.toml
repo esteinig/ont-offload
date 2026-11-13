@@ -4,7 +4,7 @@ title = "Rate limit"
 status = "draft"
 release = "v0.3"
 text = """
-Keeps total throughput of all workers within rate_limit plus at most one burst; warns above 90% of network_speed and refuses to start above 100%.
+Keeps total throughput of all workers within rate_limit plus at most one burst (the network_speed check is SRS-RATE-002).
 """
 verification = "Unit on simulated clock"
 

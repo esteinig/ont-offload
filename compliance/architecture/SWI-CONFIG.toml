@@ -3,7 +3,7 @@ type = "software-item"
 title = "Configuration and path validation"
 status = "draft"
 safety_class = "B"
-paths = ["src/config.rs"]
+paths = ["src/config/"]
 description = """
 Loads the TOML configuration, rejects unknown keys and unsafe paths. Path validation is a risk control (HAZ-001, HAZ-008).
 """

@@ -4,7 +4,7 @@ title = "Path validation"
 status = "draft"
 release = "v0.1"
 text = """
-Refuses to start when any configured path is empty, relative, contains a control character, has leading or trailing whitespace, is not valid UTF-8, or does not exist, and names the key with the value escaped.
+Refuses to start when any configured path is empty, relative, contains a control character, has leading or trailing whitespace, contains a ".." component, is not valid UTF-8, does not exist, or resolves through a symlink to a path with any of these defects, and names the key with the value escaped.
 """
 verification = "Unit: table of bad values including a single BEL byte (P2I-00569 regression)"
 
