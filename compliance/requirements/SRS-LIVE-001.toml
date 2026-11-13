@@ -9,5 +9,5 @@ Copies a file only after its size and mtime are stable for settle.
 verification = "Simulator with growing files"
 
 [links]
-allocated_to = ["SWI-RUN"]
+allocated_to = ["SWI-RUN", "SWI-SCHED"]
 mitigates = ["HAZ-005"]

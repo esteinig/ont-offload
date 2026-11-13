@@ -9,5 +9,5 @@ Logs an outage as one start line, a summary every log_every and one end line wit
 verification = "Unit on fake clock"
 
 [links]
-allocated_to = ["SWI-LOG"]
+allocated_to = ["SWI-LOG", "SWI-SCHED"]
 mitigates = ["HAZ-007"]

@@ -9,5 +9,5 @@ In watch mode, starts in the outage state when the share is missing at start-up,
 verification = "Integration: start with share absent, then mount"
 
 [links]
-allocated_to = ["SWI-CLI", "SWI-GUARD"]
+allocated_to = ["SWI-CLI", "SWI-GUARD", "SWI-SCHED"]
 mitigates = ["HAZ-001", "HAZ-007"]

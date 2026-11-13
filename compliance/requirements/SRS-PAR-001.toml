@@ -9,5 +9,5 @@ Runs the configured number of parallel workers.
 verification = "Unit"
 
 [links]
-allocated_to = ["SWI-SCHED"]
+allocated_to = ["SWI-SCHED", "SWI-CLI"]
 mitigates = []

@@ -10,7 +10,8 @@ probability_before = "occasional"
 # v0.2 review: all controls (SRS-CPY-001, SRS-RES-004) are implemented and verified
 # (failed rename, kill and resume, stale temps). Proposed residual probability
 # "improbable"; to be confirmed by the risk owner before setting.
+# v0.3: SRS-RES-007 (one process per state folder) added as a control and verified.
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-CPY-001", "SRS-RES-004"]
+controlled_by = ["SRS-CPY-001", "SRS-RES-004", "SRS-RES-007"]

@@ -7,6 +7,9 @@ harm = "Truncated input to analysis"
 severity = "serious"
 probability_before = "probable"
 # Residual probability is set when the risk controls are verified.
+# v0.3 review: all controls (SRS-LIVE-001, SRS-LIVE-002) are implemented and verified
+# (growing files on a fake clock, rewrites, source appended mid-copy). Proposed
+# residual probability "improbable"; to be confirmed by the risk owner before setting.
 probability_after = ""
 
 [links]

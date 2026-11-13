@@ -1,0 +1,13 @@
+id = "SRS-RES-007"
+type = "requirement"
+title = "One process per state folder"
+status = "draft"
+release = "v0.3"
+text = """
+watch and run take a lock in state_dir before writing anything and refuse to start while another live ont-offload process holds it; a lock left by a process that no longer exists is taken over. Two processes on one state folder could commit the same file twice or let two runs share a destination.
+"""
+verification = "Unit: live and stale lock; integration: second instance refused with exit 2"
+
+[links]
+allocated_to = ["SWI-SCHED", "SWI-CLI"]
+mitigates = ["HAZ-006", "HAZ-004"]

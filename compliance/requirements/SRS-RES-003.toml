@@ -4,7 +4,7 @@ title = "Stall detection"
 status = "draft"
 release = "v0.3"
 text = """
-Detects a worker with no progress for stall_timeout and reports it.
+Detects a worker with no progress for stall_timeout and reports it once per stalled job; when every worker is stalled, exits with 75 (restart needed; committed files are kept). Under systemd, the watchdog is fed only from the live controller loop, never from workers.
 """
 verification = "Fault test: blocking write"
 

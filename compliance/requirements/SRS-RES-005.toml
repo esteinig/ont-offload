@@ -4,7 +4,7 @@ title = "Long outages"
 status = "draft"
 release = "v0.3"
 text = """
-Keeps runs pending through an outage of any length, re-checks the share at least every check_every_max with a probe timeout, and resumes automatically once the guard has passed for stable_before_resume.
+Keeps runs pending through an outage of any length, re-checks the share at least every check_every_max with a probe timeout (30 s; the check runs off the controller thread, so a hung share cannot block it), and resumes automatically once the guard has passed for stable_before_resume.
 """
 verification = "Simulated 12 h outage on fake clock; flapping link; nightly 30 min real outage"
 
