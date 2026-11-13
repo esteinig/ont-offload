@@ -21,13 +21,27 @@ ont-runsim clean --out /data/ont-runsim
 | Command | What it does |
 | --- | --- |
 | `run --preset NAME` or `run --scenario FILE` | Writes runs over time. Overrides: `--hours`, `--speed`, `--seed`, `--size-scale`. `--keep-free 500GB` stops when the disk gets full (exit 3). `--dry-run` prints the plan only. |
-| `presets` | Lists `quick-2h`, `promethion-24h` and `outage-drill`. |
+| `presets` | Lists the built-in presets (see below). |
 | `profile RUN -o profile.json` | Records the timeline of a finished real run from file metadata only (no content is read). |
 | `status [--json]` | Progress of the simulation in an output folder. |
 | `check --dest DIR` | Compares a copy with the manifest: missing, changed and extra files. Exit 1 on any difference. ont-offload's own `manifest.sha256`, `COMPLETE` and `VERIFIED.json` are ignored. |
 | `clean` | Removes only the run folders the simulator created (listed in `.ont-runsim/runs.txt` and labelled), then empty parent folders and its state folder. Anything else in the folder stays. |
 
 The output folder must be new, empty, or a previous simulator folder; the simulator refuses any other folder, and refuses to start while another simulation runs there.
+
+## Presets
+
+| Preset | Runs | Simulated time | Wall clock | Output | Data |
+| --- | --- | --- | --- | --- | --- |
+| `quick-2h` | 1 | 2 h | 2 min | pod5, FASTQ | 67 MB |
+| `outage-drill` | 1 | 6 h | 1 h | pod5, FASTQ, 2 late files | 3.9 GB |
+| `promethion-24h` | 2 (second starts after 30 min) | 24 h | 24 h | pod5, FASTQ, 12 barcodes | 0.88 TB |
+| `promethion-72h` | 1 | 72 h | 72 h | pod5, BAM pass/fail | 1.3 TB |
+| `promethion-72h-barcoded` | 1 | 72 h | 72 h | pod5, BAM, FASTQ, 24 barcodes (87,000 files) | 1.4 TB |
+| `promethion-72h-rehearsal` | 1 | 72 h | 1 h | as `promethion-72h` at 1% size | 13 GB |
+| `promethion-p24-48h` | 4 (started over 6 h) | 48 h each | 54 h | pod5, BAM | 3.5 TB |
+
+The PromethION presets use full-scale sizes for one flow cell: about 17 GB of pod5 per hour (1.4 GB batches every 5 minutes) and about 1.5 GB of BAM per hour. Output is steady over the whole run, whereas real runs decline, so these are worst cases for sustained throughput. Any preset can be shortened, sped up or scaled down with `--hours`, `--speed` and `--size-scale`; `--dry-run` shows the plan and total size before anything is written, and `--keep-free` (default 500GB) stops the run before the sequencer disk fills.
 
 ## Scenarios
 
@@ -52,6 +66,8 @@ batch_every = "10m"
 pod5_batch = "500MB"
 fastq_pass_batch = "40MB"
 fastq_fail_batch = "5MB"
+bam_pass_batch = "0B"     # basecalled BAM output, e.g. "110MB"
+bam_fail_batch = "0B"
 barcodes = 0
 
 [[runs]]
@@ -65,6 +81,8 @@ abort_after = "3h"        # run stops without a final summary
 rewrite_closed = 2        # closed batch files rewritten a minute later
 late_files = 1            # files that appear after the final summary
 ```
+
+Batch output goes to `pod5/`, `fastq_pass/`, `fastq_fail/`, `bam_pass/` and `bam_fail/`, with `barcodeNN/` and `unclassified/` subfolders when `barcodes` is set; a batch size of `"0B"` leaves that output out. The final summary lists the number of pod5, FASTQ and BAM files.
 
 **Fake content** has the right names, extensions, folders and sizes; text files get text, binary files random or zero bytes. The sample sheet and final summary carry real fields (flow cell, sample, file counts), and the final summary is always written last. **Replay content** takes bytes from an existing run, repeating a source file when the planned file is larger.
 

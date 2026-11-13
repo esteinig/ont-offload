@@ -23,7 +23,7 @@ pub const PROFILE_VERSION: u32 = 1;
 pub enum Kind {
     /// Written when the run starts (sample sheet, pore scan).
     Start,
-    /// Output batch, written over one batch interval (pod5, fastq).
+    /// Output batch, written over one batch interval (pod5, fastq, bam).
     Batch,
     /// Written for the whole run.
     Growing,
@@ -329,9 +329,11 @@ pub fn synthetic(p: &SyntheticParams, hours: f64, rng: &mut SplitMix64) -> Profi
                 d,
             ));
         }
-        for (dir, tag, size) in [
-            ("fastq_pass", "pass", p.fastq_pass),
-            ("fastq_fail", "fail", p.fastq_fail),
+        for (dir, tag, size, ext) in [
+            ("fastq_pass", "pass", p.fastq_pass, "fastq.gz"),
+            ("fastq_fail", "fail", p.fastq_fail, "fastq.gz"),
+            ("bam_pass", "pass", p.bam_pass, "bam"),
+            ("bam_fail", "fail", p.bam_fail, "bam"),
         ] {
             if size == 0 {
                 continue;
@@ -346,11 +348,9 @@ pub fn synthetic(p: &SyntheticParams, hours: f64, rng: &mut SplitMix64) -> Profi
                     None => (String::new(), String::new()),
                 };
                 let name = if label.is_empty() {
-                    format!("{dir}/{{flow_cell}}_{tag}_{{run_hash}}_{{acq}}_{n}.fastq.gz")
+                    format!("{dir}/{{flow_cell}}_{tag}_{{run_hash}}_{{acq}}_{n}.{ext}")
                 } else {
-                    format!(
-                        "{dir}/{sub}{{flow_cell}}_{tag}_{label}_{{run_hash}}_{{acq}}_{n}.fastq.gz"
-                    )
+                    format!("{dir}/{sub}{{flow_cell}}_{tag}_{label}_{{run_hash}}_{{acq}}_{n}.{ext}")
                 };
                 files.push(spec(name, Kind::Batch, rng.jitter(share.max(1), 0.2), c, d));
             }
@@ -531,6 +531,8 @@ mod tests {
             pod5: 1000,
             fastq_pass: 100,
             fastq_fail: 10,
+            bam_pass: 50,
+            bam_fail: 5,
             barcodes: 0,
         }
     }
@@ -569,6 +571,11 @@ mod tests {
             bc.files
                 .iter()
                 .any(|f| f.path.starts_with("fastq_fail/unclassified/"))
+        );
+        assert!(
+            bc.files
+                .iter()
+                .any(|f| f.path.starts_with("bam_pass/barcode02/") && f.path.contains(".bam"))
         );
     }
 

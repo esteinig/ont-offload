@@ -42,7 +42,7 @@ enum Cmd {
         /// Scenario file (TOML).
         #[arg(long)]
         scenario: Option<PathBuf>,
-        /// Built-in preset: quick-2h, promethion-24h, outage-drill.
+        /// Built-in preset; list them with `ont-runsim presets`.
         #[arg(long)]
         preset: Option<String>,
         /// Output folder (created; must be new, empty or a previous simulator folder).
@@ -167,7 +167,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             for name in PRESETS {
                 let sc = Scenario::preset(name)?;
                 out_line(&format!(
-                    "{name:<16} {} run(s), {} h at {}x speed (about {} wall clock), size scale {}",
+                    "{name:<26} {} run(s), {} h at {}x speed (about {} wall clock), size scale {}",
                     sc.runs.len(),
                     sc.hours,
                     sc.speed,

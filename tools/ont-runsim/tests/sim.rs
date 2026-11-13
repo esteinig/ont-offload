@@ -75,6 +75,29 @@ fn seventy_two_hour_fake_run_matches_its_manifest() {
 }
 
 #[test]
+fn promethion_72h_shape_matches_its_manifest() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("sim");
+    let mut sc = Scenario::preset("promethion-72h").unwrap();
+    sc.fake.size_scale = 0.000_001;
+    let e = drive(&sc, &out, 900.0);
+    let run = &e.run_dirs()[0];
+    assert!(
+        check::check(run, &manifest_for(&out, run), &[])
+            .unwrap()
+            .ok()
+    );
+    assert_eq!(
+        std::fs::read_dir(run.join("bam_pass")).unwrap().count(),
+        864
+    );
+    assert_eq!(
+        std::fs::read_dir(run.join("bam_fail")).unwrap().count(),
+        864
+    );
+}
+
+#[test]
 fn files_grow_while_the_run_is_live() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("sim");

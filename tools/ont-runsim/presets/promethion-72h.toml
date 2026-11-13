@@ -1,0 +1,28 @@
+# One PromethION flow cell for a full 72-hour run in real time at full scale:
+# pod5 plus basecalled BAM (pass and fail), the current MinKNOW default
+# outputs. About 17 GB of pod5 and 1.5 GB of BAM per hour, roughly 1.3 TB in
+# total over 864 batches. Output is steady (real runs decline over time),
+# which makes this a worst case for sustained throughput.
+seed = 72
+hours = 72.0
+speed = 1.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 1.0
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "1.4GB"
+fastq_pass_batch = "0B"
+fastq_fail_batch = "0B"
+bam_pass_batch = "110MB"
+bam_fail_batch = "15MB"
+barcodes = 0
+
+[[runs]]
+experiment = "runsim_promethion_72h"
+sample = "sample01"
+position = "1A"

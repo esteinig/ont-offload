@@ -22,6 +22,8 @@
 //! pod5_batch = "500MB"
 //! fastq_pass_batch = "40MB"
 //! fastq_fail_batch = "5MB"
+//! bam_pass_batch = "0B"     # e.g. "50MB" for basecalled BAM output
+//! bam_fail_batch = "0B"
 //! barcodes = 0
 //!
 //! [[runs]]
@@ -127,6 +129,10 @@ pub struct Synthetic {
     pub fastq_pass_batch: String,
     /// Size of one `fastq_fail` batch.
     pub fastq_fail_batch: String,
+    /// Size of one `bam_pass` batch (`"0B"`: no BAM output).
+    pub bam_pass_batch: String,
+    /// Size of one `bam_fail` batch.
+    pub bam_fail_batch: String,
     /// Number of barcodes (0: unbarcoded).
     pub barcodes: u32,
 }
@@ -138,6 +144,8 @@ impl Default for Synthetic {
             pod5_batch: "500MB".into(),
             fastq_pass_batch: "40MB".into(),
             fastq_fail_batch: "5MB".into(),
+            bam_pass_batch: "0B".into(),
+            bam_fail_batch: "0B".into(),
             barcodes: 0,
         }
     }
@@ -250,6 +258,10 @@ pub struct SyntheticParams {
     pub fastq_pass: u64,
     /// `fastq_fail` batch bytes.
     pub fastq_fail: u64,
+    /// `bam_pass` batch bytes.
+    pub bam_pass: u64,
+    /// `bam_fail` batch bytes.
+    pub bam_fail: u64,
     /// Barcodes.
     pub barcodes: u32,
 }
@@ -297,6 +309,12 @@ impl Scenario {
             "quick-2h" => include_str!("../presets/quick-2h.toml"),
             "promethion-24h" => include_str!("../presets/promethion-24h.toml"),
             "outage-drill" => include_str!("../presets/outage-drill.toml"),
+            "promethion-72h" => include_str!("../presets/promethion-72h.toml"),
+            "promethion-72h-barcoded" => include_str!("../presets/promethion-72h-barcoded.toml"),
+            "promethion-72h-rehearsal" => {
+                include_str!("../presets/promethion-72h-rehearsal.toml")
+            }
+            "promethion-p24-48h" => include_str!("../presets/promethion-p24-48h.toml"),
             other => {
                 return Err(Error::Scenario(format!(
                     "unknown preset {other:?}; choose one of {}",
@@ -390,6 +408,8 @@ impl Scenario {
             pod5: parse_size(&s.pod5_batch).map_err(e("pod5_batch"))?,
             fastq_pass: parse_size(&s.fastq_pass_batch).map_err(e("fastq_pass_batch"))?,
             fastq_fail: parse_size(&s.fastq_fail_batch).map_err(e("fastq_fail_batch"))?,
+            bam_pass: parse_size(&s.bam_pass_batch).map_err(e("bam_pass_batch"))?,
+            bam_fail: parse_size(&s.bam_fail_batch).map_err(e("bam_fail_batch"))?,
             barcodes: s.barcodes,
         })
     }

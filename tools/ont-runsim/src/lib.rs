@@ -33,7 +33,15 @@ pub const STATE_DIR: &str = ".ont-runsim";
 pub const LABEL_FILE: &str = "SIMULATED_RUN.txt";
 
 /// Built-in scenario presets.
-pub const PRESETS: &[&str] = &["quick-2h", "promethion-24h", "outage-drill"];
+pub const PRESETS: &[&str] = &[
+    "quick-2h",
+    "outage-drill",
+    "promethion-24h",
+    "promethion-72h",
+    "promethion-72h-barcoded",
+    "promethion-72h-rehearsal",
+    "promethion-p24-48h",
+];
 
 /// Errors from the simulator.
 #[derive(Debug, thiserror::Error)]

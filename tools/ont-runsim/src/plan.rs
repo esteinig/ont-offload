@@ -312,6 +312,7 @@ pub fn build(sc: &Scenario, now: SystemTime) -> Result<Vec<RunPlan>> {
         // Generated files with real content: sample sheet and final summary.
         let pod5 = files.iter().filter(|f| ext_of(&f.rel) == "pod5").count();
         let fastq = files.iter().filter(|f| f.rel.contains(".fastq")).count();
+        let bam = files.iter().filter(|f| ext_of(&f.rel) == "bam").count();
         for f in &mut files {
             let name = f.rel.rsplit('/').next().unwrap_or(&f.rel);
             if name.starts_with("sample_sheet_") && ext_of(name) == "csv" {
@@ -321,7 +322,7 @@ pub fn build(sc: &Scenario, now: SystemTime) -> Result<Vec<RunPlan>> {
                 ));
             } else if name.starts_with("final_summary_") && ext_of(name) == "txt" {
                 f.content = text(format!(
-                    "instrument=ont-runsim\nposition={}\nflow_cell_id={}\nsample_id={}\nprotocol_group_id={}\nprotocol_run_id={}\nacquisition_run_id={}\npod5_files_in_final_dest={pod5}\nfastq_files_in_final_dest={fastq}\nsimulated=true\n",
+                    "instrument=ont-runsim\nposition={}\nflow_cell_id={}\nsample_id={}\nprotocol_group_id={}\nprotocol_run_id={}\nacquisition_run_id={}\npod5_files_in_final_dest={pod5}\nfastq_files_in_final_dest={fastq}\nbam_files_in_final_dest={bam}\nsimulated=true\n",
                     id.position, id.flow_cell, id.sample, id.experiment, id.run_hash, id.acq
                 ));
             }
@@ -487,6 +488,43 @@ mod tests {
         // Same seed, same plan.
         let again = build(&sc, SystemTime::UNIX_EPOCH).unwrap();
         assert_eq!(again[0].id, p.id);
+    }
+
+    #[test]
+    fn promethion_72h_is_full_scale_with_bam() {
+        let sc = Scenario::preset("promethion-72h").unwrap();
+        let p = &build(&sc, SystemTime::UNIX_EPOCH).unwrap()[0];
+        let count = |ext: &str| p.files.iter().filter(|f| ext_of(&f.rel) == ext).count();
+        assert_eq!(count("pod5"), 864);
+        assert_eq!(count("bam"), 2 * 864);
+        assert!(p.files.iter().any(|f| f.rel.starts_with("bam_fail/")));
+        let total = p.total_bytes();
+        assert!(
+            (1_200_000_000_000..1_400_000_000_000).contains(&total),
+            "{total}"
+        );
+        let fs = p
+            .files
+            .iter()
+            .find(|f| f.rel.starts_with("final_summary_"))
+            .unwrap();
+        let Content::Text(t) = &fs.content else {
+            panic!("final summary is text")
+        };
+        assert!(String::from_utf8_lossy(t).contains("bam_files_in_final_dest=1728"));
+
+        let bc = Scenario::preset("promethion-72h-barcoded").unwrap();
+        let p = &build(&bc, SystemTime::UNIX_EPOCH).unwrap()[0];
+        assert!(
+            p.files
+                .iter()
+                .any(|f| f.rel.starts_with("bam_pass/barcode24/"))
+        );
+        assert!(
+            p.files
+                .iter()
+                .any(|f| f.rel.starts_with("fastq_pass/unclassified/"))
+        );
     }
 
     #[test]
