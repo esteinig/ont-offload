@@ -42,9 +42,13 @@ fn unknown_subcommand_is_a_usage_error() {
 /// Verifies: SRS-CLI-004
 #[test]
 fn unimplemented_command_exits_1_with_plan() {
-    bin().arg("status").assert().code(1).stderr(
-        predicate::str::contains("not implemented yet").and(predicate::str::contains("v0.4")),
-    );
+    bin()
+        .args(["cleanup", "--dry-run"])
+        .assert()
+        .code(1)
+        .stderr(
+            predicate::str::contains("not implemented yet").and(predicate::str::contains("v0.5")),
+        );
 }
 
 /// Verifies: SRS-LOG-002
@@ -53,18 +57,18 @@ fn log_file_receives_lines() {
     let dir = tempfile::tempdir().expect("tempdir");
     let log = dir.path().join("ont-offload.log");
     bin()
-        .args(["--log-file", log.to_str().expect("utf8"), "bench"])
+        .args(["--log-file", log.to_str().expect("utf8"), "cleanup"])
         .assert()
         .code(1);
     let text = std::fs::read_to_string(&log).expect("log written");
-    assert!(text.contains("starting: bench"), "{text}");
+    assert!(text.contains("starting: cleanup"), "{text}");
 }
 
 /// Verifies: SRS-LOG-001
 #[test]
 fn json_log_format_on_stderr() {
     bin()
-        .args(["--log-format", "json", "bench"])
+        .args(["--log-format", "json", "cleanup"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains("\"level\":\"INFO\""));

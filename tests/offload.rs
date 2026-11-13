@@ -44,7 +44,8 @@ impl Env {
             &config,
             format!(
                 "dest_root = {:?}\ntarget_id = {TARGET:?}\nstate_dir = {:?}\n\
-                 [guard]\nallowed_fstypes = [\"tmpfs\"]\n[source]\nroot = {:?}\n",
+                 [guard]\nallowed_fstypes = [\"tmpfs\"]\n\
+                 [transfer]\nmin_free = \"1MB\"\n[source]\nroot = {:?}\n",
                 share.path().to_str().expect("utf8"),
                 dir.path().join("state").to_str().expect("utf8"),
                 dir.path().join("data").to_str().expect("utf8"),

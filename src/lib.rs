@@ -6,6 +6,7 @@
 //! staged implementation plan in the docs). v0.1 provides the filesystem
 //! layer ([`fsio`]) and configuration validation ([`config`], `check-config`).
 
+pub mod bench;
 pub mod cleanup;
 pub mod cli;
 pub mod config;
@@ -50,7 +51,24 @@ pub fn execute(cli: &Cli) -> Result<()> {
             None,
             *until_idle,
         ),
-        other => Err(Error::NotImplemented {
+        Command::Status { json } => status(&cli.global.config, &RealFs, *json, out),
+        Command::Bench {
+            size,
+            max_streams,
+            no_chunks,
+        } => {
+            let size = config::units::parse_size(size).map_err(Error::Config)?;
+            bench_share(
+                &cli.global.config,
+                &RealFs,
+                None,
+                size,
+                *max_streams,
+                !*no_chunks,
+                out,
+            )
+        }
+        other @ Command::Cleanup { .. } => Err(Error::NotImplemented {
             command: other.name(),
             planned: other.planned(),
         }),
@@ -233,11 +251,13 @@ pub fn verify_run(fs: &dyn Fs, run: &Path, source: bool, out: &mut dyn Write) ->
 
 /// `watch [--until-idle]`: the offload daemon.
 ///
-/// Takes the state folder lock, then runs the controller until stopped. The
-/// journal is consistent at every moment, so stopping the process (SIGTERM,
-/// SIGKILL, power loss) is always safe; the next start resumes.
+/// Takes the state folder lock, logs the version, the effective settings
+/// and (on the first check) the destination's mount, then runs the
+/// controller until stopped. SIGHUP re-reads `rate_limit`. The journal is
+/// consistent at every moment, so stopping the process (SIGTERM, SIGKILL,
+/// power loss) is always safe; the next start resumes.
 ///
-/// Implements: SRS-RES-007, SRS-PAR-001, SRS-RES-006
+/// Implements: SRS-RES-007, SRS-PAR-001, SRS-RES-006, SRS-RATE-003
 ///
 /// # Errors
 /// [`Error::Config`] or [`Error::Guard`] at start-up, [`Error::RestartNeeded`]
@@ -256,16 +276,12 @@ pub fn watch(
     let _lock = sched::lock::InstanceLock::acquire(&*fs, &cfg.state_dir.resolved)?;
     let guard = std::sync::Arc::new(guard_for(&cfg, mountinfo));
     log::info!(
-        "watching {} -> {} ({} worker(s), rate limit {}, settle {}, settle after complete {})",
+        "ont-offload {} watching {} -> {}; effective configuration from {}:\n{}",
+        env!("CARGO_PKG_VERSION"),
         escape_control(&cfg.source.root.resolved.to_string_lossy()),
         escape_control(&cfg.dest_root.resolved.to_string_lossy()),
-        cfg.bandwidth.workers,
-        cfg.bandwidth
-            .rate_limit
-            .bytes_per_sec()
-            .map_or_else(|| "none".to_owned(), |b| format!("{b} B/s")),
-        humantime::format_duration(cfg.transfer.settle),
-        humantime::format_duration(cfg.transfer.settle_after_complete),
+        escape_control(&config_path.to_string_lossy()),
+        cfg.summary().trim_end()
     );
     // Rescan at least twice per settle window, at most every 10 s.
     let scan_every = (cfg.transfer.settle / 2).clamp(
@@ -278,6 +294,13 @@ pub fn watch(
         tick: scan_every.min(std::time::Duration::from_secs(1)),
         ..sched::watch::Options::default()
     };
+    let reload = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    #[cfg(unix)]
+    if let Err(e) =
+        signal_hook::flag::register(signal_hook::consts::SIGHUP, std::sync::Arc::clone(&reload))
+    {
+        log::warn!("cannot handle SIGHUP ({e}); changing rate_limit needs a restart");
+    }
     let mut w = sched::watch::Watcher::new(
         cfg,
         fs,
@@ -285,6 +308,75 @@ pub fn watch(
         std::sync::Arc::new(sched::RealClock::new()),
         opts,
         sched::notify::Notifier::from_env(),
-    )?;
+    )?
+    .with_reload(config_path, reload);
     w.run()
+}
+
+/// `status [--json]`: print the snapshot that `watch` keeps in
+/// `state_dir/state.json`. A snapshot older than three intervals (at least
+/// 30 s) is flagged as stale: the daemon is not running or is stuck.
+///
+/// Implements: SRS-STATE-001, SRS-CLI-001
+///
+/// # Errors
+/// [`Error::Config`] for a bad configuration or a missing or unreadable
+/// snapshot.
+pub fn status(config_path: &Path, fs: &dyn Fs, json: bool, out: &mut dyn Write) -> Result<()> {
+    let cfg = config::load(config_path, fs)?.config;
+    let dir = &cfg.state_dir.resolved;
+    if json {
+        let path = dir.join(state::STATE_FILE);
+        let bytes = fs.read(&path).map_err(|e| {
+            Error::Config(format!(
+                "cannot read {}: {e}; is `ont-offload watch` running?",
+                escape_control(&path.to_string_lossy())
+            ))
+        })?;
+        out.write_all(&bytes)?;
+        return Ok(());
+    }
+    let snap = state::read_snapshot(fs, dir)
+        .map_err(|e| Error::Config(format!("{e}; is `ont-offload watch` running?")))?;
+    write!(
+        out,
+        "{}",
+        state::describe(&snap, std::time::SystemTime::now())
+    )?;
+    Ok(())
+}
+
+/// `bench`: measure the share and suggest settings.
+///
+/// Implements: SRS-PAR-002
+///
+/// # Errors
+/// As [`bench::run`].
+#[allow(clippy::too_many_arguments)]
+pub fn bench_share(
+    config_path: &Path,
+    fs: &dyn Fs,
+    mountinfo: Option<&Path>,
+    size: u64,
+    max_streams: usize,
+    chunks: bool,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let cfg = config::load(config_path, fs)?.config;
+    let guard = guard_for(&cfg, mountinfo);
+    let opts = bench::BenchOptions {
+        size,
+        max_streams,
+        chunk_size: cfg.transfer.chunk_size,
+        chunks,
+    };
+    bench::run(
+        fs,
+        &guard,
+        &cfg.state_dir.resolved,
+        &opts,
+        cfg.transfer.min_free,
+        out,
+    )?;
+    Ok(())
 }
