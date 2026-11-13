@@ -11,12 +11,12 @@ One controller thread owns all decisions and worker threads do all destination w
 | `fsio` | SWI-FSIO | `Fs` trait, `RealFs`, `FaultyFs` |
 | `run` | SWI-RUN | run detection, selection, path mapping, lifecycle |
 | `copy` | SWI-COPY | in-flight SHA-256, size check, optional read-back, atomic commit |
-| `sched` | SWI-SCHED | queue, workers, rate limiter, pause and retry, outages, stall detection |
+| `sched` | SWI-SCHED | `watch` controller, clock, workers, rate limiter, pause and retry, outages, stall detection, state-folder lock, systemd notification |
 | `journal` | SWI-JOURNAL | journal, manifest, `run.json`, `COMPLETE`, `VERIFIED.json` |
 | `state` | SWI-STATE | `state.json`, `events.jsonl` |
 | `cleanup` | SWI-CLEANUP | gated source deletion |
 
-In v0.2 the controller copies one file at a time in the foreground (`run`); the worker pool, rate limiter and pause flag arrive with `watch` in v0.3. The journal (`state_dir/runs/<run id>/journal.jsonl`) records the claim, every committed file and completion, and is what a restart resumes from.
+`run` copies one file at a time in the foreground. `watch` (`sched::watch`) is one controller thread on a `Clock`: each step collects worker outcomes, runs or collects an off-thread guard probe, rescans the source, updates each run's `Lifecycle` (live, settling, reconciling, finalising) and hands stable files and finished runs to the `Pool`. The controller owns the journals and never touches the share itself; workers copy files and write the end-of-run outputs, sharing one `RateLimiter` and one pause flag, and publish progress for stall detection. The outage `Tracker` is a pure state machine (backoff, stability window, log events), so the whole controller runs on a fake clock in tests. The journal (`state_dir/runs/<run id>/journal.jsonl`) records the claim, every committed file and completion, and is what a restart resumes from.
 
 The full design (fault analysis of the legacy scripts, per-file pipeline, outage handling, paths and symlinks, live state schema, simulator) is in the project's design plan.
 

@@ -1,6 +1,6 @@
 # Offloading a run
 
-v0.2 copies one completed run at a time in the foreground. Copying live runs with the `watch` daemon comes in v0.3.
+`run` copies one completed run in the foreground. To copy runs while they are being written, use the daemon, `watch` (see [Running the daemon](watch.md)); it uses the same copy pipeline, journal and outputs.
 
 ## Before the first run
 

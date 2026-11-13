@@ -7,14 +7,15 @@ Wants=network-online.target
 [Service]
 Type=notify
 ExecStart=/usr/local/bin/ont-offload watch --config /etc/ont-offload/config.toml
-ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=30
-# 75 = restart needed after an outage; restart it.
+# 75 = every worker stalled (e.g. hung hard mount); restart it.
 RestartForceExitStatus=75
 # 2 = configuration refused; do not loop.
 RestartPreventExitStatus=2
+# watch sends WATCHDOG=1 from its controller loop; a hung controller is restarted.
 WatchdogSec=120
+# Stopping at any moment is safe: the journal is always consistent.
 TimeoutStopSec=60
 StateDirectory=ont-offload
 LogsDirectory=ont-offload
