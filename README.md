@@ -6,7 +6,7 @@ Verified offload of Oxford Nanopore sequencing runs (live or completed) from a s
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](https://esteinig.github.io/ont-offload)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-> **Status: v0.3 (in development).** `ont-offload watch` copies live and completed runs with parallel workers and a total rate limit, and rides out share outages of any length; `run` copies one completed run and `verify` checks a copy. Live state (`status`), `bench` and gated deletion come in v0.4 and v0.5; those commands report the release in which they are planned. See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
+> **Status: v0.3 (in development).** `ont-offload watch` copies live and completed runs with parallel workers and a total rate limit, and rides out share outages of any length; `run` copies one completed run and `verify` checks a copy. Live state (`status`), `bench` and gated deletion come in v0.4 and v0.5; those commands report the release in which they are planned. Known limitations and their controls are listed in [the user guide](docs/src/user-guide/limitations.md). See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
 
 ## What it does
 

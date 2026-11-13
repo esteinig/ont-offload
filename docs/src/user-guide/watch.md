@@ -65,5 +65,4 @@ Only one ont-offload process may use a `state_dir`; a second `watch` or `run` on
 
 ## Limits in v0.3
 
-- A file that appears in a run after the run was completed (later than `settle_after_complete`) is picked up at the next start, which re-offloads the changed run.
-- `status`, `state.json`, `events.jsonl` and `notify_command` alerts come in v0.4; until then, follow the log or `systemctl status`.
+The open limitations (two instances on one share, no fairness between runs, files added after `COMPLETE`, memory and rescan cost) and the rules that come with controlled ones are listed, with their hazards and controls, in [Known limitations](limitations.md).
