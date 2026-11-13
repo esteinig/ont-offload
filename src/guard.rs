@@ -34,6 +34,8 @@ pub struct Mount {
     pub fstype: String,
     /// Mount source (server and export).
     pub source: String,
+    /// Mount options (per-mount and superblock), as in the mount table.
+    pub options: String,
 }
 
 /// Destination guard for one configuration.
@@ -76,14 +78,23 @@ pub fn parse_mountinfo(text: &str) -> Vec<Mount> {
     text.lines()
         .filter_map(|line| {
             let (left, right) = line.split_once(" - ")?;
-            let point = left.split(' ').nth(4)?;
+            let mut l = left.split(' ');
+            let point = l.nth(4)?;
+            let mount_opts = l.next().unwrap_or("");
             let mut r = right.split(' ');
             let fstype = r.next()?;
             let source = r.next().unwrap_or("");
+            let super_opts = r.next().unwrap_or("");
             Some(Mount {
                 point: PathBuf::from(unescape(point)),
                 fstype: fstype.to_owned(),
                 source: unescape(source),
+                options: [mount_opts, super_opts]
+                    .iter()
+                    .filter(|o| !o.is_empty())
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(" "),
             })
         })
         .collect()

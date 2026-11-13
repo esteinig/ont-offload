@@ -1,0 +1,13 @@
+id = "SRS-RES-010"
+type = "requirement"
+title = "Free-space floor on the share"
+status = "draft"
+release = "v0.4"
+text = """
+Checks free space on the share before each copy and with every destination check (at least every minute while the share is available); when a copy would leave less than transfer.min_free, or free space is already below it, pauses all writes as in an outage, raises capacity_low with an alert, and resumes after free space is back above min_free and the share has been stable for stable_before_resume. No file fails for lack of space.
+"""
+verification = "Fake-clock test: share below min_free pauses with nothing written, alert in state; resumes and completes when space returns; ENOSPC fault test"
+
+[links]
+allocated_to = ["SWI-COPY", "SWI-SCHED", "SWI-FSIO"]
+mitigates = ["HAZ-007"]

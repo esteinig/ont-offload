@@ -32,7 +32,10 @@ pub const COMPLETE: &str = "COMPLETE";
 /// Name of the verification receipt.
 pub const VERIFIED: &str = "VERIFIED.json";
 /// Top-level names ont-offload writes into a destination run folder.
-pub const RESERVED_NAMES: &[&str] = &[MANIFEST, RUN_JSON, COMPLETE, VERIFIED];
+pub const RESERVED_NAMES: &[&str] = &[MANIFEST, RUN_JSON, COMPLETE, VERIFIED, SHARE_CLAIM];
+
+/// Claim file in each destination run folder (SRS-SEL-008).
+pub const SHARE_CLAIM: &str = ".ont-offload-claim.json";
 
 /// Lowercase hex of bytes.
 #[must_use]
@@ -107,6 +110,11 @@ pub enum Record {
         /// When.
         ts: String,
     },
+    /// The source changed after completion; `COMPLETE` was withdrawn.
+    Reopen {
+        /// When.
+        ts: String,
+    },
 }
 
 /// A committed file as recorded in the journal.
@@ -132,6 +140,9 @@ pub struct Journal {
     pub files: BTreeMap<String, Committed>,
     /// Manifest digest once complete.
     pub complete: Option<String>,
+    /// When the run was completed (RFC 3339), if complete.
+    pub completed_at: Option<String>,
+    records: usize,
 }
 
 impl Journal {
@@ -151,6 +162,8 @@ impl Journal {
             claim: None,
             files: BTreeMap::new(),
             complete: None,
+            completed_at: None,
+            records: 0,
         };
         let text = match fs.read(&j.path()) {
             Ok(b) => String::from_utf8_lossy(&b).into_owned(),
@@ -180,11 +193,65 @@ impl Journal {
         Ok(j)
     }
 
-    fn path(&self) -> PathBuf {
+    /// Records in the journal file (for compaction and tests).
+    #[must_use]
+    pub fn records(&self) -> usize {
+        self.records
+    }
+
+    /// Rewrite the journal as one claim, one record per file and the
+    /// completion record, atomically.
+    ///
+    /// Implements: SRS-RES-008
+    ///
+    /// # Errors
+    /// I/O errors (the old journal is kept).
+    pub fn compact(&mut self, fs: &dyn Fs) -> Result<()> {
+        let ts = now_rfc3339();
+        let mut out = Vec::new();
+        let mut push = |r: &Record| -> Result<()> {
+            out.extend(serde_json::to_vec(r).map_err(|e| Error::Integrity(e.to_string()))?);
+            out.push(b'\n');
+            Ok(())
+        };
+        let mut n = 0;
+        if let Some((source, dest, level)) = &self.claim {
+            push(&Record::Claim {
+                source: source.clone(),
+                dest: dest.clone(),
+                dest_starts_at: *level,
+                ts: ts.clone(),
+            })?;
+            n += 1;
+        }
+        for (rel, c) in &self.files {
+            push(&Record::File {
+                rel: rel.clone(),
+                size: c.size,
+                mtime_ns: c.mtime_ns,
+                sha256: c.sha256.clone(),
+                ts: ts.clone(),
+            })?;
+            n += 1;
+        }
+        if let Some(m) = &self.complete {
+            push(&Record::Complete {
+                manifest_sha256: m.clone(),
+                ts: self.completed_at.clone().unwrap_or_else(|| ts.clone()),
+            })?;
+            n += 1;
+        }
+        write_atomic(fs, &self.dir, "journal.jsonl", &out)?;
+        self.records = n;
+        Ok(())
+    }
+
+    pub(crate) fn path(&self) -> PathBuf {
         self.dir.join("journal.jsonl")
     }
 
     fn apply(&mut self, r: Record) {
+        self.records += 1;
         match r {
             Record::Claim {
                 source,
@@ -208,10 +275,19 @@ impl Journal {
                     },
                 );
                 self.complete = None;
+                self.completed_at = None;
             }
             Record::Complete {
-                manifest_sha256, ..
-            } => self.complete = Some(manifest_sha256),
+                manifest_sha256,
+                ts,
+            } => {
+                self.complete = Some(manifest_sha256);
+                self.completed_at = Some(ts);
+            }
+            Record::Reopen { .. } => {
+                self.complete = None;
+                self.completed_at = None;
+            }
         }
     }
 
@@ -401,6 +477,69 @@ pub fn host_name(fs: &dyn Fs) -> String {
     std::env::var("HOSTNAME")
         .or_else(|_| std::env::var("COMPUTERNAME"))
         .unwrap_or_else(|_| "unknown".into())
+}
+
+/// Claim a destination run folder on the share itself: create
+/// [`SHARE_CLAIM`] with create-new semantics, or accept an existing claim
+/// made for the same source. A claim for another source, by any host or
+/// state folder, refuses the run.
+///
+/// Implements: SRS-SEL-008
+///
+/// # Errors
+/// [`crate::copy::CopyFail::Conflict`] for another run's claim,
+/// [`crate::copy::CopyFail::Guard`], I/O errors.
+pub fn claim_on_share(
+    fs: &dyn Fs,
+    guard: &crate::guard::Guard,
+    dest: &Path,
+    source: &Path,
+    run_id: &str,
+    target_id: &str,
+) -> std::result::Result<(), crate::copy::CopyFail> {
+    use crate::copy::CopyFail;
+    guard.check(fs).map_err(CopyFail::Guard)?;
+    fs.create_dir_all(dest)?;
+    let path = dest.join(SHARE_CLAIM);
+    let src = source.to_string_lossy().into_owned();
+    let body = serde_json::json!({
+        "tool": "ont-offload",
+        "version": env!("CARGO_PKG_VERSION"),
+        "target_id": target_id,
+        "host": host_name(fs),
+        "source": src,
+        "run_id": run_id,
+        "claimed_at": now_rfc3339(),
+    });
+    match fs.create_new(&path) {
+        Ok(mut f) => {
+            f.write_all((body.to_string() + "\n").as_bytes())?;
+            f.sync_data()?;
+            drop(f);
+            fs.sync_dir(dest)?;
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing: serde_json::Value =
+                serde_json::from_slice(&fs.read(&path)?).unwrap_or_default();
+            let theirs = existing
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            if theirs == src {
+                Ok(())
+            } else {
+                Err(CopyFail::Conflict(format!(
+                    "destination {} is claimed on the share by run {} (host {}); not mixing data from {}",
+                    escape_control(&dest.to_string_lossy()),
+                    escape_control(theirs),
+                    escape_control(existing.get("host").and_then(|v| v.as_str()).unwrap_or("?")),
+                    escape_control(&src)
+                )))
+            }
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 #[cfg(test)]

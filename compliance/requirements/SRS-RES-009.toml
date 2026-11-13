@@ -4,9 +4,9 @@ title = "Incremental rescan"
 status = "draft"
 release = "v0.4"
 text = """
-Rescans only folders whose modification time changed since the last scan, with a full rescan every scan_full_every (default 10 min), so scan cost follows activity instead of run size.
+Rescans only folders whose modification time changed since the last scan (a listing is trusted only once the folder is older than 2 s) and checks only files not already committed as they are, with a full rescan every source.full_rescan_every (default 10 min) and always before a run's manifest is written, so scan cost follows activity instead of run size.
 """
-verification = "Fake-clock test: no file missed with incremental scans; scan work bounded for a full-size 72 h run"
+verification = "Fake-clock test: unchanged folders not listed again, status calls bounded by folders plus waiting files, new file found, periodic full rescan, run offloads exactly; scan-time bound over a full-size 72 h run in the v0.5 soak"
 
 [links]
 allocated_to = ["SWI-RUN", "SWI-SCHED"]

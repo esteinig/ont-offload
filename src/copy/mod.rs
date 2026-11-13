@@ -66,6 +66,8 @@ pub struct CopyOptions {
     pub file_mode: u32,
     /// Copy the source modification time.
     pub preserve_mtime: bool,
+    /// Free space to keep on the destination (`transfer.min_free`).
+    pub min_free: u64,
 }
 
 /// A committed copy.
@@ -87,6 +89,10 @@ pub enum CopyFail {
     /// The source changed during the copy, or a check failed in a way a new
     /// attempt can fix (short write, read-back mismatch).
     Retry(String),
+    /// What reached the destination differs from what was read (size
+    /// check or read-back); retried like [`CopyFail::Retry`] and reported
+    /// as an integrity mismatch.
+    Mismatch(String),
     /// A destination file that ont-offload did not write is in the way.
     Conflict(String),
     /// The guard failed; stop writing.
@@ -100,7 +106,7 @@ pub enum CopyFail {
 impl std::fmt::Display for CopyFail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Retry(m) | Self::Conflict(m) => f.write_str(m),
+            Self::Retry(m) | Self::Mismatch(m) | Self::Conflict(m) => f.write_str(m),
             Self::Paused => f.write_str("paused"),
             Self::Guard(e) => write!(f, "{e}"),
             Self::Io(e) => write!(f, "{e}"),
@@ -244,6 +250,7 @@ pub fn copy_file_with(
 
     guard.quick(fs).map_err(CopyFail::Guard)?;
     fs.create_dir_all(parent)?;
+    check_free(fs, parent, s0.len, opts.min_free)?;
     let tmp = parent.join(temp_name(name));
     let result = (|| -> Result<Copied, CopyFail> {
         let mut out = fs.create_new(&tmp)?;
@@ -280,14 +287,14 @@ pub fn copy_file_with(
         }
         let written = fs.metadata(&tmp)?.len;
         if written != total {
-            return Err(CopyFail::Retry(format!(
+            return Err(CopyFail::Mismatch(format!(
                 "size check failed: {written} bytes on the destination, {total} read"
             )));
         }
         if opts.verify == VerifyMode::Readback {
             let (rl, rs) = hash_file(fs, &tmp, opts.chunk_size)?;
             if rl != total || rs != sha {
-                return Err(CopyFail::Retry(format!(
+                return Err(CopyFail::Mismatch(format!(
                     "read-back mismatch: wrote {sha}, read back {rs}"
                 )));
             }
@@ -313,6 +320,29 @@ pub fn copy_file_with(
         let _ = fs.remove_file(&tmp);
     }
     result
+}
+
+/// Refuse a copy that would leave less than `min_free` on the destination.
+/// The error is classified as capacity (pause, like a full share).
+///
+/// Implements: SRS-RES-010
+///
+/// # Errors
+/// [`CopyFail::Io`] with [`std::io::ErrorKind::StorageFull`].
+pub fn check_free(fs: &dyn Fs, dir: &Path, size: u64, min_free: u64) -> Result<(), CopyFail> {
+    if min_free == 0 {
+        return Ok(());
+    }
+    let free = fs.free_space(dir)?;
+    if free < min_free.saturating_add(size) {
+        return Err(CopyFail::Io(std::io::Error::new(
+            std::io::ErrorKind::StorageFull,
+            format!(
+                "{free} bytes free on the destination; copying {size} bytes would go below transfer.min_free ({min_free} bytes)"
+            ),
+        )));
+    }
+    Ok(())
 }
 
 /// Remove ont-offload's own temp files below a destination run folder.

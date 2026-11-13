@@ -60,6 +60,12 @@ impl Env {
     }
 
     fn cfg(&self, extra_top: &str, extra: &str) -> Config {
+        // Test file systems are far smaller than the default min_free.
+        let extra = if extra.contains("[transfer]") {
+            extra.replace("[transfer]", "[transfer]\nmin_free = \"1MB\"")
+        } else {
+            format!("{extra}\n[transfer]\nmin_free = \"1MB\"\n")
+        };
         let path = self.dir.path().join("config.toml");
         std::fs::write(
             &path,
@@ -640,6 +646,7 @@ fn opts(verify: config::VerifyMode) -> CopyOptions {
         on_existing: config::OnExisting::Fail,
         file_mode: 0o640,
         preserve_mtime: true,
+        min_free: 0,
     }
 }
 
@@ -738,7 +745,7 @@ fn short_writes_and_read_back_bit_flips_are_caught() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CopyFail::Retry(ref m) if m.contains("read-back mismatch")),
+        matches!(err, CopyFail::Mismatch(ref m) if m.contains("read-back mismatch")),
         "{err}"
     );
     assert!(!env.p("share/b.bin").exists());

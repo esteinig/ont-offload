@@ -198,6 +198,15 @@ pub trait Fs: Send + Sync {
     /// # Errors
     /// Returns the operating system error.
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()>;
+
+    /// Bytes available to this process on the filesystem holding `path`
+    /// (`u64::MAX` where it cannot be known; the default).
+    ///
+    /// # Errors
+    /// The OS error.
+    fn free_space(&self, _path: &Path) -> io::Result<u64> {
+        Ok(u64::MAX)
+    }
 }
 
 /// The production filesystem: plain `std::fs`.
@@ -297,6 +306,17 @@ impl Fs for RealFs {
     fn set_mode(&self, _path: &Path, _mode: u32) -> io::Result<()> {
         Ok(())
     }
+
+    #[cfg(unix)]
+    fn free_space(&self, path: &Path) -> io::Result<u64> {
+        let st = rustix::fs::statvfs(path).map_err(io::Error::from)?;
+        Ok(st.f_bavail.saturating_mul(st.f_frsize))
+    }
+
+    #[cfg(not(unix))]
+    fn free_space(&self, _path: &Path) -> io::Result<u64> {
+        Ok(u64::MAX)
+    }
 }
 
 /// Raw OS error numbers ont-offload treats specially (Linux values).
@@ -369,6 +389,7 @@ pub fn classify(err: &io::Error) -> ErrorClass {
     match err.kind() {
         io::ErrorKind::NotFound => ErrorClass::NotFound,
         io::ErrorKind::PermissionDenied => ErrorClass::Permission,
+        io::ErrorKind::StorageFull | io::ErrorKind::QuotaExceeded => ErrorClass::NoSpace,
         io::ErrorKind::TimedOut
         | io::ErrorKind::NotConnected
         | io::ErrorKind::ConnectionReset

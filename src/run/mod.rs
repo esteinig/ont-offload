@@ -23,7 +23,10 @@ use crate::fsio::{DirEntry, FileKind, Fs};
 use crate::logging::escape_control;
 
 pub use offload::{OffloadReport, offload};
-pub use select::{Selected, SelectedFile, select};
+pub use select::{
+    ScanCache, Selected, SelectedFile, dir_signature, fingerprint, select, select_cached,
+    signature_changed,
+};
 
 /// Build a glob set with `/`-aware matching (`*` does not cross folders).
 ///

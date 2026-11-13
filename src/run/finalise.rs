@@ -123,3 +123,25 @@ pub fn write(fs: &dyn Fs, guard: &Guard, dest: &Path, out: &Outputs) -> Result<(
     write_atomic(fs, dest, COMPLETE, complete.as_bytes())?;
     Ok(())
 }
+
+/// Withdraw a completed run before it is offloaded again: `COMPLETE`
+/// first, then `VERIFIED.json`, so that at no moment does the share say
+/// "complete" or "verified" for a run that is about to change. The
+/// manifest and `run.json` stay until they are rewritten.
+///
+/// Implements: SRS-LIVE-004
+///
+/// # Errors
+/// [`Error::Guard`], I/O errors other than a missing file.
+pub fn withdraw(fs: &dyn Fs, guard: &Guard, dest: &Path) -> Result<()> {
+    guard.check(fs)?;
+    for name in [COMPLETE, journal::VERIFIED] {
+        match fs.remove_file(&dest.join(name)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    fs.sync_dir(dest)?;
+    Ok(())
+}

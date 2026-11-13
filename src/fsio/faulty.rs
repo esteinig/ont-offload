@@ -48,6 +48,8 @@ pub enum Op {
     SetMode,
     /// [`Fs::append_sync`].
     AppendSync,
+    /// [`Fs::free_space`].
+    FreeSpace,
 }
 
 /// What happens when a rule fires.
@@ -63,6 +65,8 @@ pub enum Fault {
     BitFlip(u64),
     /// Sleep before performing the call normally.
     Delay(Duration),
+    /// Report this many free bytes from [`Fs::free_space`].
+    Free(u64),
 }
 
 /// One fault-injection rule.
@@ -296,6 +300,19 @@ impl Fs for FaultyFs {
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
         self.check(Op::SetMode, path)?;
         self.inner.set_mode(path, mode)
+    }
+
+    fn free_space(&self, path: &Path) -> io::Result<u64> {
+        let faults = self.check(Op::FreeSpace, path)?;
+        let real = self.inner.free_space(path)?;
+        Ok(faults
+            .iter()
+            .rev()
+            .find_map(|f| match *f {
+                Fault::Free(n) => Some(n),
+                _ => None,
+            })
+            .unwrap_or(real))
     }
 }
 

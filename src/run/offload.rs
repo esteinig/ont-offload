@@ -13,7 +13,7 @@ use crate::copy::{self, CopyFail, CopyOptions};
 use crate::error::{Error, Result};
 use crate::fsio::{ErrorClass, FileKind, Fs, classify};
 use crate::guard::Guard;
-use crate::journal::{self, COMPLETE, Journal, Record};
+use crate::journal::{self, COMPLETE, Journal, Record, claim_on_share};
 use crate::logging::escape_control;
 
 use super::{DetectedRun, Markers, dest_rel, finalise, safe_join, select};
@@ -65,7 +65,7 @@ pub fn commit_message(run_id: &str, rel: &str, c: &copy::Copied, secs: f64) -> S
 /// `assume_completed` treats the run as finished without a complete marker
 /// (`run --completed`).
 ///
-/// Implements: SRS-SEL-001, SRS-SEL-002, SRS-SEL-007, SRS-RES-004, SRS-VER-002, SRS-LOG-003
+/// Implements: SRS-SEL-001, SRS-SEL-002, SRS-SEL-007, SRS-SEL-008, SRS-RES-004, SRS-VER-002, SRS-LOG-003
 ///
 /// # Errors
 /// [`Error::Guard`] when the guard fails (nothing more is written),
@@ -125,10 +125,27 @@ pub fn offload(
                 report.manifest_sha256 = Some(m.clone());
                 return Ok(report);
             }
-            log::warn!("run {name}: source changed since it was completed; offloading again");
+            log::warn!(
+                "run {name}: source changed since it was completed; withdrawing COMPLETE and offloading again"
+            );
         }
     }
 
+    claim_on_share(fs, guard, &dest, &run.path, &j.id, &cfg.target_id).map_err(|e| match e {
+        CopyFail::Conflict(m) => Error::Integrity(m),
+        CopyFail::Guard(e) => e,
+        CopyFail::Io(e) => Error::Io(e),
+        other => Error::Integrity(other.to_string()),
+    })?;
+    if j.complete.is_some() {
+        super::finalise::withdraw(fs, guard, &dest)?;
+        j.append(
+            fs,
+            Record::Reopen {
+                ts: journal::now_rfc3339(),
+            },
+        )?;
+    }
     fs.create_dir_all(&dest)?;
     let removed = copy::remove_stale_temps(fs, &dest)?;
     if removed > 0 {
@@ -148,6 +165,7 @@ pub fn offload(
         on_existing: cfg.transfer.on_existing,
         file_mode: cfg.transfer.file_mode,
         preserve_mtime: cfg.transfer.preserve_mtime,
+        min_free: cfg.transfer.min_free,
     };
     for f in &sel.files {
         let src = safe_join(&run.path, Path::new(&f.rel)).map_err(Error::Config)?;
@@ -235,6 +253,9 @@ pub fn offload(
             ts: journal::now_rfc3339(),
         },
     )?;
+    if let Err(e) = j.compact(fs) {
+        log::warn!("run {name}: cannot compact the journal: {e}");
+    }
     log::info!(
         "run {name}: COMPLETE, {} files ({} copied, {} already there), {} bytes in {:.1}s, manifest sha256={manifest_sha}",
         report.files,
