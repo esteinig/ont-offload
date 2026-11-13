@@ -10,4 +10,4 @@ verification = "Fault test: blocking write"
 
 [links]
 allocated_to = ["SWI-SCHED"]
-mitigates = ["HAZ-007"]
+mitigates = ["HAZ-007", "HAZ-013"]

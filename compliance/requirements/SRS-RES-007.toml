@@ -10,4 +10,4 @@ verification = "Unit: live and stale lock; integration: second instance refused 
 
 [links]
 allocated_to = ["SWI-SCHED", "SWI-CLI"]
-mitigates = ["HAZ-006", "HAZ-004"]
+mitigates = ["HAZ-006", "HAZ-004", "HAZ-010"]

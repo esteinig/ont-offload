@@ -1,0 +1,15 @@
+id = "HAZ-010"
+type = "hazard"
+title = "Two offload instances write to one destination"
+status = "draft"
+cause = "Two ont-offload processes with separate state folders (two hosts or two configurations) write to the same share; destination claims are kept per state folder, so neither sees the other"
+harm = "Files of different runs mixed in one destination folder, or a run left incomplete by conflicts"
+severity = "critical"
+probability_before = "remote"
+# Known limitation (v0.3), documented in the user guide under "Known limitations".
+# v0.3: the state-folder lock (SRS-RES-007) covers one host and one state folder only; SRS-CPY-002 stops overwrites but not mixing. SRS-SEL-008 (v0.4) moves the claim onto the share.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-CPY-002", "SRS-RES-007", "SRS-SEL-008"]

@@ -10,4 +10,4 @@ verification = "Integration: kill and restart"
 
 [links]
 allocated_to = ["SWI-JOURNAL", "SWI-COPY", "SWI-RUN"]
-mitigates = ["HAZ-004"]
+mitigates = ["HAZ-004", "HAZ-012", "HAZ-013"]

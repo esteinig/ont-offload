@@ -10,4 +10,4 @@ verification = "Integration + schema check"
 
 [links]
 allocated_to = ["SWI-STATE"]
-mitigates = ["HAZ-007"]
+mitigates = ["HAZ-007", "HAZ-011"]

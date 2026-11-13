@@ -10,4 +10,4 @@ verification = "Simulator: late file after final_summary"
 
 [links]
 allocated_to = ["SWI-RUN", "SWI-JOURNAL", "SWI-SCHED"]
-mitigates = ["HAZ-003"]
+mitigates = ["HAZ-003", "HAZ-012"]
