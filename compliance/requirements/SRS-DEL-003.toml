@@ -4,9 +4,9 @@ title = "Listed files only"
 status = "draft"
 release = "v0.5"
 text = """
-Deletes only files listed in the manifest, records each in deletions.jsonl before removing it, and writes DELETED.json to the destination run.
+Deletes only files listed in the run's manifest, files in sub-folders before files at the top of the run, appending each to deletions.jsonl (path, size, time, digest, destination and gate evidence) and flushing it before the file is removed. Removes folders only when empty, deepest first, the run folder last, and keeps anything else. Then writes DELETED.json into the destination run folder and records the deletion in the journal.
 """
-verification = "Integration: extra and excluded files stay"
+verification = "Unit: files added after completion stay with their folder, one record per file, markers last, DELETED.json and journal; soak; integration"
 
 [links]
 allocated_to = ["SWI-CLEANUP"]

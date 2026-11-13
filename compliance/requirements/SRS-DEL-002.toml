@@ -4,10 +4,10 @@ title = "Deletion gates"
 status = "draft"
 release = "v0.5"
 text = """
-Deletes a run's source files only when the run is complete, delete_after has passed, the configured gate passes against the manifest, the guard passes, and every source file matches its journal record and hash.
+Deletes a run's source files only when every gate passes, in order: finished (journal complete, COMPLETE on the share names the same manifest, delete_after passed since completion); share present (guard passes, the manifest on the share is the completed one, every manifest entry is a committed file with the same digest and every destination file has its committed size); content proof (storage-verify: VERIFIED.json with result ok, the same manifest digest, file count and bytes, verified_at not before completion; readback: every destination file re-read now, rate-limited, and matching; both); source unchanged (every source file has its committed size and modification time, and its committed digest when rehash_source is on). A missing source file is accepted only when deletions.jsonl lists it for the run.
 """
-verification = "One test per failing gate; simulator runs"
+verification = "Unit: one test per failing gate on simulated runs; fake-clock soak; integration"
 
 [links]
-allocated_to = ["SWI-CLEANUP"]
+allocated_to = ["SWI-CLEANUP", "SWI-JOURNAL"]
 mitigates = ["HAZ-009"]

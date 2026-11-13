@@ -1,0 +1,13 @@
+id = "SRS-DEL-005"
+type = "requirement"
+title = "Delete only when space is needed"
+status = "draft"
+release = "v0.5"
+text = """
+With cleanup.only_when_free_below set, deletes runs that passed every gate oldest completion first and only while the source's free space (plus what the pass already freed) is below the threshold; the others are reported as held. A run already partly deleted is always finished.
+"""
+verification = "Unit with injected free space: nothing deleted above the threshold, the oldest run alone when it frees enough"
+
+[links]
+allocated_to = ["SWI-CLEANUP"]
+mitigates = ["HAZ-009"]
