@@ -38,6 +38,8 @@ workers = 4
 rate_limit = "50MB/s"
 
 [transfer]
+# CI shares are small; keep only a token reserve.
+min_free = "100MB"
 settle = "5s"
 settle_after_complete = "30s"
 
