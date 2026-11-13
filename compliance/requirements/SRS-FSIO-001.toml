@@ -1,0 +1,13 @@
+id = "SRS-FSIO-001"
+type = "requirement"
+title = "Filesystem access and error classification"
+status = "draft"
+release = "v0.1"
+text = """
+Performs every filesystem operation through one abstraction that passes operating system error codes through unchanged, and classifies errors as outage (EIO, ENOTCONN, ETIMEDOUT, ESTALE, host or network unreachable, connection reset), no space, not found, permission or other.
+"""
+verification = "Unit: RealFs error codes; FaultyFs injection of errno, device, short write, bit flip"
+
+[links]
+allocated_to = ["SWI-FSIO"]
+mitigates = ["HAZ-007"]
