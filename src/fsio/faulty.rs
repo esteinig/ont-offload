@@ -44,6 +44,10 @@ pub enum Op {
     ReadDir,
     /// [`Fs::sync_dir`].
     SyncDir,
+    /// [`Fs::set_mode`].
+    SetMode,
+    /// [`Fs::append_sync`].
+    AppendSync,
 }
 
 /// What happens when a rule fires.
@@ -72,6 +76,8 @@ pub struct Rule {
     pub fault: Fault,
     /// How many more times the rule fires; `None` means forever.
     pub remaining: Option<u32>,
+    /// Matching calls to let through before the rule starts firing.
+    pub skip: u32,
 }
 
 impl Rule {
@@ -83,6 +89,16 @@ impl Rule {
             path_contains: path_contains.to_owned(),
             fault,
             remaining: None,
+            skip: 0,
+        }
+    }
+
+    /// A rule that lets `k` matching calls through, then fires on every later one.
+    #[must_use]
+    pub fn after(op: Op, path_contains: &str, fault: Fault, k: u32) -> Self {
+        Self {
+            skip: k,
+            ..Self::always(op, path_contains, fault)
         }
     }
 
@@ -124,6 +140,10 @@ fn fire(rules: &Rules, op: Op, path: &Path) -> Vec<Fault> {
     let mut rules = rules.lock().unwrap_or_else(PoisonError::into_inner);
     let mut fired = Vec::new();
     for rule in rules.iter_mut().filter(|r| r.matches(op, path)) {
+        if rule.skip > 0 {
+            rule.skip -= 1;
+            continue;
+        }
         if let Some(n) = rule.remaining.as_mut() {
             *n -= 1;
         }
@@ -267,6 +287,16 @@ impl Fs for FaultyFs {
         self.check(Op::SyncDir, path)?;
         self.inner.sync_dir(path)
     }
+
+    fn append_sync(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        self.check(Op::AppendSync, path)?;
+        self.inner.append_sync(path, data)
+    }
+
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        self.check(Op::SetMode, path)?;
+        self.inner.set_mode(path, mode)
+    }
 }
 
 struct FaultyReader {
@@ -324,6 +354,10 @@ impl FsFile for FaultyFile {
         let faults = fire(&self.rules, Op::SyncData, &self.path);
         pre(&faults)?;
         self.inner.sync_data()
+    }
+
+    fn set_modified(&mut self, time: std::time::SystemTime) -> io::Result<()> {
+        self.inner.set_modified(time)
     }
 }
 
