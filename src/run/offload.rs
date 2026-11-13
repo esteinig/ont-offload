@@ -95,6 +95,13 @@ pub fn offload(
 
     let state = &cfg.state_dir.resolved;
     let mut j = Journal::open(fs, state, &run.path)?;
+    if let Some(ts) = &j.deleting {
+        return Err(Error::Config(format!(
+            "run {name}: its source was deleted by cleanup (started {ts}); it is not offloaded again. \
+             To offload a new run at this path, move its journal {} away",
+            escape_control(&j.path().to_string_lossy())
+        )));
+    }
     let mut report = OffloadReport {
         run_id: j.id.clone(),
         dest: dest.clone(),

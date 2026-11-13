@@ -91,6 +91,20 @@ fn sample() -> Snapshot {
             run: None,
             message: "share unavailable for 1h".into(),
         }],
+        cleanup: Some(CleanupState {
+            mode: "dry-run".into(),
+            gate: "storage-verify".into(),
+            running: false,
+            last_pass_at: Some("2026-11-12T07:00:00Z".into()),
+            next_pass_s: 1200,
+            deleted_runs: 0,
+            deleted_bytes: 0,
+            would_delete: 2,
+            held: 0,
+            waiting: 3,
+            refused: 1,
+            stopped: None,
+        }),
     }
 }
 
@@ -159,6 +173,10 @@ fn every_event_kind_is_in_the_schema_and_nothing_else() {
         "outage_reminder",
         "outage_ended",
         "worker_stalled",
+        "run_deleted",
+        "deletion_dry_run",
+        "deletion_refused",
+        "deletion_stopped",
     ] {
         assert!(ours.iter().any(|o| o == k), "{k}");
     }
@@ -250,6 +268,8 @@ fn status_text_flags_a_stale_snapshot() {
     assert!(text.contains("pod5/a.pod5"), "{text}");
     assert!(text.contains("1 FAILED"), "{text}");
     assert!(text.contains("share unavailable for 1h"), "{text}");
+    assert!(text.contains("cleanup: dry-run"), "{text}");
+    assert!(text.contains("2 would be deleted"), "{text}");
     let later = now + Duration::from_secs(31);
     assert!(describe(&snap, later).contains("STALE"));
     assert_eq!(
@@ -333,8 +353,11 @@ fn notify_command_gets_alerting_events_on_stdin_and_in_the_environment() {
         Kind::SourceSpaceLow,
         Kind::CapacityLow,
         Kind::RunFailed,
+        Kind::DeletionRefused,
+        Kind::DeletionStopped,
     ] {
         assert!(k.alerts(), "{k:?}");
     }
     assert!(!Kind::FileCommitted.alerts());
+    assert!(!Kind::RunDeleted.alerts() && !Kind::DeletionDryRun.alerts());
 }

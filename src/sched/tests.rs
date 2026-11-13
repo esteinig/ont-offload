@@ -338,6 +338,8 @@ impl Env {
                 tick: Duration::from_millis(10),
                 until_idle: false,
                 online_check_every: s(60),
+                cleanup_every: s(3600),
+                cleanup_first_after: s(300),
             },
             Notifier::default(),
         )
@@ -1218,4 +1220,282 @@ fn replay_soak_24h_offloads_exactly_with_valid_state() {
         assert!(k.contains(&want), "{want:?} missing");
     }
     assert_schema_valid(&mut w, &env, s(total + 1800));
+}
+
+// ---------------------------------------------------------------------
+// v0.5: the hourly cleanup pass
+// ---------------------------------------------------------------------
+
+/// Storage-side verification, as a cron job on the receiving side does:
+/// every complete destination run without a receipt gets one.
+fn storage_verify_all(env: &Env, runs: &[PathBuf]) -> usize {
+    let mut n = 0;
+    for r in runs {
+        let d = env.dest_of(r);
+        if d.join(COMPLETE).exists() && !d.join(crate::journal::VERIFIED).exists() {
+            crate::journal::verify(&RealFs, &d, false).unwrap();
+            n += 1;
+        }
+    }
+    n
+}
+
+fn cleanup_cfg(env: &Env, delete: &str) -> Config {
+    env.cfg(
+        "",
+        &format!(
+            "[transfer]\nwatch_completed_for = \"3h\"\n[cleanup]\ndelete = {delete:?}\ndelete_after = \"1h\"\n"
+        ),
+    )
+}
+
+/// The daemon's pass: dry run first, never a run still watched, then a
+/// real deletion after a restart, and a deleted run is never offloaded
+/// again even when its folder reappears.
+///
+/// Verifies: SRS-DEL-001, SRS-DEL-006, SRS-STATE-001, SRS-STATE-002
+#[test]
+fn hourly_cleanup_pass_leaves_watched_runs_and_deletes_retired_ones() {
+    let env = Env::new();
+    let mut engine = env.engine(
+        "seed = 9\nhours = 0.5\n[fake]\nsize_scale = 0.0002\n[[runs]]\nexperiment = \"e\"\nsample = \"s\"\n",
+    );
+    let mut w = env.watcher(cleanup_cfg(&env, "dry-run"));
+    let total = engine.total_seconds() as u64;
+    drive(&env, &mut w, &mut engine, 0, total + 600, 30, |_, _| {});
+    finish(&env, &mut engine);
+    let run = engine.run_dirs()[0].clone();
+    assert_eq!(w.stats.completed_runs, 1);
+    assert_eq!(storage_verify_all(&env, &[run.clone()]), 1);
+
+    // Still watched (3 h): every pass leaves it alone.
+    steps(&env, &mut w, total + 660, total + 2 * 3600, 60);
+    let snap = w.snapshot(s(total + 2 * 3600));
+    let c = snap.cleanup.clone().expect("cleanup state");
+    assert_eq!(c.mode, "dry-run");
+    assert!(c.last_pass_at.is_some());
+    assert_eq!(c.would_delete, 0, "{c:?}");
+    assert!(kinds(&env).contains(&Kind::DeletionDryRun));
+    // Retired: the next dry run says it would delete it, and deletes nothing.
+    steps(&env, &mut w, total + 2 * 3600 + 60, total + 5 * 3600, 60);
+    assert_eq!(
+        w.snapshot(s(total + 5 * 3600))
+            .cleanup
+            .unwrap()
+            .would_delete,
+        1
+    );
+    assert!(run.exists());
+    env.matches_simulator(&run);
+    assert_schema_valid(&mut w, &env, s(total + 5 * 3600));
+    drop(w);
+
+    // Restart with deletion on: the run is too old to be watched, so the
+    // first pass deletes it.
+    let t0 = total + 5 * 3600;
+    let mut w = env.watcher(cleanup_cfg(&env, "on"));
+    steps(&env, &mut w, t0, t0 + 900, 30);
+    assert!(!run.exists(), "deleted");
+    assert_eq!(w.stats.deleted_runs, 1);
+    assert!(kinds(&env).contains(&Kind::RunDeleted));
+    assert!(env.dest_of(&run).join(crate::journal::DELETED).exists());
+    env.matches_simulator(&run);
+    let snap = w.snapshot(s(t0 + 900));
+    assert_eq!(snap.totals.deleted_runs, 1);
+    assert_eq!(snap.cleanup.as_ref().unwrap().deleted_runs, 1);
+    assert_schema_valid(&mut w, &env, s(t0 + 900));
+    let reports = std::fs::read_to_string(env.p("state").join(crate::cleanup::REPORTS)).unwrap();
+    assert!(reports.lines().count() >= 4, "every pass is reported");
+
+    // The folder comes back with a run marker: not offloaded again.
+    std::fs::create_dir_all(&run).unwrap();
+    std::fs::write(run.join("sample_sheet_again.csv"), b"x").unwrap();
+    let discovered = kinds(&env)
+        .iter()
+        .filter(|k| **k == Kind::RunDiscovered)
+        .count();
+    let mut w = env.watcher(cleanup_cfg(&env, "on"));
+    steps(&env, &mut w, t0 + 960, t0 + 1200, 30);
+    assert!(w.runs.is_empty() && w.completed.is_empty());
+    assert_eq!(w.stats.committed, 0);
+    assert_eq!(w.stats.failed_runs, 1, "a person is alerted");
+    assert!(
+        w.snapshot(s(t0 + 1200))
+            .alerts
+            .iter()
+            .any(|a| a.message.contains("deleted by cleanup"))
+    );
+    assert_eq!(
+        kinds(&env)
+            .iter()
+            .filter(|k| **k == Kind::RunDiscovered)
+            .count(),
+        discovered
+    );
+}
+
+/// A run refused by a gate raises one alert (one `notify_command`), shown
+/// until the problem is gone; a failure while deleting stops the pass with
+/// an alert, and the next pass resumes.
+///
+/// Verifies: SRS-DEL-004, SRS-DEL-006, SRS-STATE-003
+#[test]
+fn refused_and_stopped_deletions_alert_once_and_clear() {
+    let env = Env::new();
+    let run = one_completed_run(&env);
+    let mut w = env.watcher(env.cfg(
+        "",
+        "[transfer]\nwatch_completed_for = \"1s\"\n[cleanup]\ndelete = \"on\"\ndelete_after = \"1s\"\n",
+    ));
+    // Offload it (the run is complete; watch_completed_for is tiny).
+    steps(&env, &mut w, 0, 600, 10);
+    assert_eq!(w.stats.completed_runs, 1);
+    storage_verify_all(&env, &[run.clone()]);
+    // Change one destination file's size: refused.
+    let dest = env.dest_of(&run);
+    let pod5 = std::fs::read_dir(dest.join("pod5"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .next()
+        .unwrap();
+    let full = std::fs::read(&pod5).unwrap();
+    std::fs::write(&pod5, &full[1..]).unwrap();
+    steps(&env, &mut w, 900, 300 + 3 * 3600, 300);
+    let refused = kinds(&env)
+        .iter()
+        .filter(|k| **k == Kind::DeletionRefused)
+        .count();
+    assert_eq!(
+        refused,
+        1,
+        "one alert, not one per pass: {}",
+        std::fs::read_to_string(env.p("state").join(crate::cleanup::REPORTS)).unwrap_or_default()
+    );
+    let snap = w.snapshot(s(300 + 3 * 3600));
+    assert!(
+        snap.alerts.iter().any(|a| a.kind == Kind::DeletionRefused),
+        "{:?}",
+        snap.alerts
+    );
+    assert!(run.exists());
+    // Repaired: the alert clears and deletion starts, but removing a
+    // file fails after a few: stopped, with an alert.
+    std::fs::write(&pod5, &full).unwrap();
+    env.fs.add(Rule::after(
+        Op::RemoveFile,
+        "/data/",
+        Fault::Errno(errno::EACCES),
+        5,
+    ));
+    let t = 300 + 4 * 3600;
+    steps(&env, &mut w, t, t + 3600, 300);
+    env.fs.clear();
+    env.base_rules();
+    assert!(
+        kinds(&env).contains(&Kind::DeletionStopped),
+        "{:?}",
+        kinds(&env)
+    );
+    let snap = w.snapshot(s(t + 3600));
+    assert!(!snap.alerts.iter().any(|a| a.kind == Kind::DeletionRefused));
+    // Resumed on a later pass once the share is back.
+    steps(&env, &mut w, t + 3900, t + 4 * 3600, 300);
+    assert!(!run.exists());
+    assert_eq!(w.stats.deleted_runs, 1);
+    let snap = w.snapshot(s(t + 4 * 3600));
+    assert!(
+        snap.alerts.iter().all(|a| a.kind != Kind::DeletionStopped),
+        "{:?}",
+        snap.alerts
+    );
+}
+
+/// The v0.5 qualification soak on the fake clock: 72 h, 200 runs of an
+/// hour each, a new one every 22 minutes, hourly storage-side verification by a "cron job", hourly
+/// cleanup passes. Memory stays bounded (only live and watched runs are
+/// held), every run is offloaded exactly, and every deleted source run has
+/// a verified, intact copy, `DELETED.json` and a deletion record per file.
+///
+/// The journal's completion times are real time while the controller's
+/// clock is fake, so `delete_after` is not what this soak measures (the
+/// gate tests do); `watch_completed_for` is.
+///
+/// Verifies: SRS-DEL-002, SRS-DEL-003, SRS-DEL-006, SRS-RES-008, SRS-RES-009, SRS-STATE-001
+#[test]
+fn soak_72h_with_hourly_verify_and_cleanup() {
+    let env = Env::new();
+    let mut toml = "seed = 72\nhours = 1\n[fake]\nsize_scale = 0.00002\n".to_owned();
+    for i in 0..200 {
+        toml.push_str(&format!(
+            "[[runs]]\nexperiment = \"soak\"\nsample = \"r{i:03}\"\nstart_after = \"{}m\"\n",
+            i * 22
+        ));
+    }
+    let mut engine = env.engine(&toml);
+    let mut w = env.watcher(env.cfg(
+        "",
+        "[bandwidth]\nworkers = 2\n[transfer]\nwatch_completed_for = \"1h\"\n\
+         [cleanup]\ndelete = \"on\"\ndelete_after = \"1h\"\n",
+    ));
+    let total = engine.total_seconds() as u64;
+    assert!(total >= 72 * 3600, "{total}");
+    let runs = engine.run_dirs();
+    let mut held_max = 0;
+    let mut verified = 0;
+    drive(
+        &env,
+        &mut w,
+        &mut engine,
+        0,
+        total + 4 * 3600,
+        120,
+        |t, w| {
+            if t % 3600 == 0 {
+                verified += storage_verify_all(&env, &runs);
+            }
+            held_max = held_max.max(w.runs.len() + w.completed.len());
+            if t % (12 * 3600) == 0 {
+                assert_schema_valid(w, &env, s(t));
+            }
+        },
+    );
+    finish(&env, &mut engine);
+    verified += storage_verify_all(&env, &runs);
+    // A few live runs and those watched for an hour: memory does not
+    // grow with the number of runs.
+    assert!(held_max <= 10, "held {held_max} runs at once");
+    assert_eq!(w.stats.completed_runs, 200);
+    assert_eq!(w.stats.failed_files, 0);
+    assert_eq!(verified, 200);
+    let log = std::fs::read_to_string(env.p("state").join(crate::cleanup::DELETIONS)).unwrap();
+    let recs: Vec<crate::cleanup::DeletionRecord> = log
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let mut deleted = 0;
+    for r in &runs {
+        env.matches_simulator(r);
+        let dest = env.dest_of(r);
+        if r.exists() {
+            assert!(!dest.join(crate::journal::DELETED).exists());
+            continue;
+        }
+        deleted += 1;
+        assert!(dest.join(crate::journal::VERIFIED).exists());
+        assert!(dest.join(crate::journal::DELETED).exists());
+        let id = crate::journal::run_id(r);
+        let manifest = crate::journal::parse_manifest(
+            &std::fs::read_to_string(dest.join("manifest.sha256")).unwrap(),
+        )
+        .unwrap();
+        let listed: std::collections::BTreeSet<&str> = recs
+            .iter()
+            .filter(|d| d.run_id == id)
+            .map(|d| d.rel.as_str())
+            .collect();
+        assert_eq!(listed.len(), manifest.len());
+    }
+    assert!(deleted >= 195, "only {deleted} of 200 deleted");
+    assert_eq!(w.stats.deleted_runs, deleted);
+    assert_schema_valid(&mut w, &env, s(total + 4 * 3600));
 }

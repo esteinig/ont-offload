@@ -15,6 +15,7 @@ use std::time::{Duration, SystemTime};
 
 use serde_json::json;
 
+use crate::cleanup::{self, Outcome as CleanOutcome};
 use crate::config::{self, Config};
 use crate::copy::{CopyFail, CopyOptions};
 use crate::error::{Error, Result};
@@ -50,6 +51,10 @@ pub struct Options {
     /// available, so the state shows its free space and a lost share is
     /// noticed between copies.
     pub online_check_every: Duration,
+    /// Run a cleanup pass this often (when `cleanup.delete` is not `off`).
+    pub cleanup_every: Duration,
+    /// The first cleanup pass, after start-up.
+    pub cleanup_first_after: Duration,
 }
 
 impl Default for Options {
@@ -60,6 +65,8 @@ impl Default for Options {
             tick: Duration::from_secs(1),
             until_idle: false,
             online_check_every: Duration::from_secs(60),
+            cleanup_every: Duration::from_secs(3600),
+            cleanup_first_after: Duration::from_secs(300),
         }
     }
 }
@@ -87,6 +94,8 @@ pub struct Stats {
     pub outages: usize,
     /// Stalls seen.
     pub stalls: usize,
+    /// Source runs deleted by cleanup.
+    pub deleted_runs: usize,
 }
 
 /// What must happen on the share before files of a run are copied.
@@ -164,6 +173,16 @@ enum Tracked {
     Retired,
 }
 
+/// The cleanup pass thread and its last result.
+#[derive(Debug, Default)]
+struct CleanupCtl {
+    handle: Option<std::thread::JoinHandle<Result<cleanup::Report>>>,
+    stop: Arc<AtomicBool>,
+    next: Option<Duration>,
+    last: Option<cleanup::Report>,
+    refused: BTreeSet<String>,
+}
+
 struct ProbeResult {
     result: std::result::Result<(), String>,
     wrong_target: Option<String>,
@@ -225,6 +244,8 @@ pub struct Watcher {
     recent: VecDeque<(Duration, u64)>,
     cursor: Option<PathBuf>,
     reload: Option<(PathBuf, Arc<AtomicBool>)>,
+    cleanup: CleanupCtl,
+    wall0: SystemTime,
     /// Counters.
     pub stats: Stats,
 }
@@ -325,6 +346,8 @@ impl Watcher {
             recent: VecDeque::new(),
             cursor: None,
             reload: None,
+            cleanup: CleanupCtl::default(),
+            wall0: SystemTime::now(),
             stats: Stats::default(),
         })
     }
@@ -406,6 +429,7 @@ impl Watcher {
             && self.last_scan.is_some()
             && !self.outage.is_down()
             && self.pool.in_flight() == 0
+            && self.cleanup.handle.is_none()
             && self.runs.values().all(|r| {
                 r.broken.is_some()
                     || (!r.failed.is_empty()
@@ -994,6 +1018,10 @@ impl Watcher {
     fn reopen(&mut self, now: Duration, c: DoneRun) -> Result<()> {
         let rel = rel_of(&c.det);
         let journal = Journal::open(&*self.fs, &self.cfg.state_dir.resolved, &c.det.path)?;
+        if journal.deleting.is_some() {
+            self.retired.insert(c.det.path.clone());
+            return Ok(());
+        }
         let mut r = Self::live_run(now, &c.det, c.dest.clone(), journal);
         r.gate = Gate::Withdraw;
         r.withdraw = true;
@@ -1067,6 +1095,22 @@ impl Watcher {
         let dest = safe_join(self.guard.dest(), &rel).map_err(Error::Config)?;
         let state = &self.cfg.state_dir.resolved;
         let mut j = Journal::open(&*self.fs, state, &d.path)?;
+        if let Some(ts) = j.deleted_at.clone() {
+            // A run marker at the path of a deleted run: never offloaded
+            // into the old destination, and a person must look.
+            return Err(Error::Config(format!(
+                "its source was deleted by cleanup ({ts}) and a run marker is there again; \
+                 it is not offloaded. To offload a new run at this path, move the journal {} away",
+                escape_control(&j.path().to_string_lossy())
+            )));
+        }
+        if j.deleting.is_some() {
+            log::info!(
+                "run {}: being deleted by cleanup; not offloaded again",
+                escape_control(&d.rel.to_string_lossy())
+            );
+            return Ok(Tracked::Retired);
+        }
         journal::claim(
             &*self.fs,
             state,
@@ -1089,7 +1133,7 @@ impl Watcher {
                     .completed_at
                     .as_deref()
                     .and_then(|t| humantime::parse_rfc3339_weak(t).ok())
-                    .and_then(|t| SystemTime::now().duration_since(t).ok())
+                    .and_then(|t| self.wall(now).duration_since(t).ok())
                     .unwrap_or_default();
                 if age >= self.cfg.transfer.watch_completed_for {
                     log::info!("run {name}: already complete");
@@ -1876,10 +1920,255 @@ impl Watcher {
                 reopened_runs: self.stats.reopened_runs as u64,
                 outages: self.stats.outages as u64,
                 stalls: self.stats.stalls as u64,
+                deleted_runs: self.stats.deleted_runs as u64,
             },
             runs,
             alerts,
+            cleanup: self.cleanup_state(now),
         }
+    }
+
+    // -----------------------------------------------------------------
+    // Cleanup
+    // -----------------------------------------------------------------
+
+    /// Wall-clock time at clock reading `now` (a fake clock moves it too).
+    fn wall(&self, now: Duration) -> SystemTime {
+        self.wall0 + now
+    }
+
+    /// Start a cleanup pass every `cleanup_every` (the first after
+    /// `cleanup_first_after`), never during an outage, on its own thread.
+    /// Runs being offloaded or still watched are left out.
+    ///
+    /// Implements: SRS-DEL-006
+    fn cleanup_step(&mut self, now: Duration) {
+        let Some(delete) = cleanup::mode(&self.cfg, false) else {
+            return;
+        };
+        self.cleanup_collect(now);
+        if self.cleanup.handle.is_some() || !self.started_up || self.outage.is_down() {
+            return;
+        }
+        let next = *self
+            .cleanup
+            .next
+            .get_or_insert(now + self.opts.cleanup_first_after.min(self.opts.cleanup_every));
+        if now < next {
+            return;
+        }
+        self.cleanup.next = Some(now + self.opts.cleanup_every);
+        let skip: BTreeSet<String> = self
+            .runs
+            .values()
+            .map(|r| r.journal.id.clone())
+            .chain(self.completed.values().map(|c| c.id.clone()))
+            .collect();
+        let cfg = self.cfg.clone();
+        let fs = Arc::clone(&self.fs);
+        let guard = Arc::clone(&self.guard);
+        let rate = Arc::clone(&self.rate);
+        let stop = Arc::clone(&self.cleanup.stop);
+        let wall = self.wall(now);
+        let spawned = std::thread::Builder::new()
+            .name("cleanup".into())
+            .spawn(move || {
+                cleanup::Pass {
+                    cfg: &cfg,
+                    fs: &*fs,
+                    guard: &guard,
+                    now: wall,
+                    delete,
+                    only: None,
+                    skip,
+                    rate: Some(&rate),
+                    stop: Some(&stop),
+                    record: true,
+                }
+                .run()
+            });
+        match spawned {
+            Ok(h) => self.cleanup.handle = Some(h),
+            Err(e) => log::error!("cannot start the cleanup pass: {e}"),
+        }
+    }
+
+    /// Collect a finished cleanup pass: events, alerts and counters.
+    ///
+    /// Implements: SRS-DEL-006, SRS-STATE-002
+    #[allow(clippy::too_many_lines)]
+    fn cleanup_collect(&mut self, _now: Duration) {
+        if !self
+            .cleanup
+            .handle
+            .as_ref()
+            .is_some_and(std::thread::JoinHandle::is_finished)
+        {
+            return;
+        }
+        let Some(h) = self.cleanup.handle.take() else {
+            return;
+        };
+        let report = match h.join() {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => {
+                let msg = format!("cleanup pass failed: {e}");
+                self.emit(
+                    Kind::DeletionStopped,
+                    log::Level::Error,
+                    None,
+                    None,
+                    &msg,
+                    json!({"reason": e.to_string()}),
+                );
+                self.raise(
+                    "cleanup:stopped",
+                    Kind::DeletionStopped,
+                    log::Level::Error,
+                    None,
+                    &msg,
+                );
+                return;
+            }
+            Err(_) => {
+                log::error!("the cleanup pass panicked");
+                return;
+            }
+        };
+        let mut refused = BTreeSet::new();
+        for r in &report.runs {
+            match r.outcome {
+                CleanOutcome::Deleted => {
+                    self.stats.deleted_runs += 1;
+                    self.retired.insert(PathBuf::from(&r.source));
+                    let msg = format!(
+                        "run {}: source deleted after every gate passed ({} files, {})",
+                        r.source,
+                        r.files,
+                        config::units::Bytes(r.bytes)
+                    );
+                    self.emit(
+                        Kind::RunDeleted,
+                        log::Level::Info,
+                        Some(&r.source),
+                        None,
+                        &msg,
+                        json!({
+                            "run_id": r.run_id,
+                            "files": r.files,
+                            "bytes": r.bytes,
+                            "kept": r.kept,
+                            "evidence": r.evidence,
+                        }),
+                    );
+                }
+                CleanOutcome::Refused => {
+                    refused.insert(r.run_id.clone());
+                    let msg = format!("run {}: NOT deleted: {}", r.source, r.reason);
+                    if !self.cleanup.refused.contains(&r.run_id) {
+                        self.emit(
+                            Kind::DeletionRefused,
+                            log::Level::Error,
+                            Some(&r.source),
+                            None,
+                            &msg,
+                            json!({"run_id": r.run_id, "reason": r.reason}),
+                        );
+                    }
+                    self.raise(
+                        &format!("cleanup:{}", r.run_id),
+                        Kind::DeletionRefused,
+                        log::Level::Error,
+                        Some(&r.source),
+                        &msg,
+                    );
+                }
+                _ => {}
+            }
+        }
+        for id in self
+            .cleanup
+            .refused
+            .difference(&refused)
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            self.clear(&format!("cleanup:{id}"));
+        }
+        self.cleanup.refused = refused;
+        if report.mode == "dry-run" {
+            let would: Vec<&str> = report
+                .runs
+                .iter()
+                .filter(|r| r.outcome == CleanOutcome::WouldDelete)
+                .map(|r| r.source.as_str())
+                .collect();
+            let msg = report.summary();
+            self.emit(
+                Kind::DeletionDryRun,
+                log::Level::Info,
+                None,
+                None,
+                &msg,
+                json!({
+                    "would_delete": would,
+                    "held": report.count(CleanOutcome::Held),
+                    "waiting": report.count(CleanOutcome::Waiting),
+                    "refused": report.count(CleanOutcome::Refused),
+                }),
+            );
+        }
+        match &report.stopped {
+            Some(why) if why != "stopping" => {
+                let msg = format!("cleanup pass stopped: {why}");
+                self.emit(
+                    Kind::DeletionStopped,
+                    log::Level::Error,
+                    None,
+                    None,
+                    &msg,
+                    json!({"reason": why}),
+                );
+                self.raise(
+                    "cleanup:stopped",
+                    Kind::DeletionStopped,
+                    log::Level::Error,
+                    None,
+                    &msg,
+                );
+            }
+            _ => self.clear("cleanup:stopped"),
+        }
+        self.cleanup.last = Some(report);
+    }
+
+    fn cleanup_state(&self, now: Duration) -> Option<state::CleanupState> {
+        let delete = cleanup::mode(&self.cfg, false)?;
+        let last = self.cleanup.last.as_ref();
+        let count = |o| last.map_or(0, |r| r.count(o) as u64);
+        Some(state::CleanupState {
+            mode: if delete { "delete" } else { "dry-run" }.into(),
+            gate: match self.cfg.cleanup.gate {
+                config::Gate::StorageVerify => "storage-verify",
+                config::Gate::Readback => "readback",
+                config::Gate::Both => "both",
+            }
+            .into(),
+            running: self.cleanup.handle.is_some(),
+            last_pass_at: last.map(|r| r.finished_at.clone()),
+            next_pass_s: self
+                .cleanup
+                .next
+                .map_or(self.opts.cleanup_first_after, |n| n.saturating_sub(now))
+                .as_secs(),
+            deleted_runs: count(CleanOutcome::Deleted),
+            deleted_bytes: last.map_or(0, cleanup::Report::deleted_bytes),
+            would_delete: count(CleanOutcome::WouldDelete),
+            held: count(CleanOutcome::Held),
+            waiting: count(CleanOutcome::Waiting),
+            refused: count(CleanOutcome::Refused),
+            stopped: last.and_then(|r| r.stopped.clone()),
+        })
     }
 
     /// Write `state.json` when it is due (or now, with `force`).
@@ -1926,6 +2215,7 @@ impl Watcher {
         if self.started_up && !self.outage.is_down() {
             self.schedule(now)?;
         }
+        self.cleanup_step(now);
         self.check_stalls(now)?;
         self.publish(now, false);
         Ok(())
@@ -1962,6 +2252,9 @@ impl Watcher {
             } else if self.probe.is_some() {
                 std::thread::sleep(Duration::from_millis(1));
                 self.probe_step(now)?;
+            } else if self.cleanup.handle.is_some() {
+                std::thread::sleep(Duration::from_millis(1));
+                self.cleanup_collect(now);
             } else {
                 break;
             }
@@ -2013,6 +2306,16 @@ impl Watcher {
                 };
             }
             self.wait(self.opts.tick)?;
+        }
+    }
+}
+
+impl Drop for Watcher {
+    fn drop(&mut self) {
+        // A cleanup pass stops between files; the next start resumes it.
+        self.cleanup.stop.store(true, Ordering::SeqCst);
+        if let Some(h) = self.cleanup.handle.take() {
+            let _ = h.join();
         }
     }
 }

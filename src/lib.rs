@@ -68,10 +68,15 @@ pub fn execute(cli: &Cli) -> Result<()> {
                 out,
             )
         }
-        other @ Command::Cleanup { .. } => Err(Error::NotImplemented {
-            command: other.name(),
-            planned: other.planned(),
-        }),
+        Command::Cleanup { dry_run, run } => cleanup_runs(
+            &cli.global.config,
+            &RealFs,
+            None,
+            *dry_run,
+            run.as_deref(),
+            std::time::SystemTime::now(),
+            out,
+        ),
     }
 }
 
@@ -344,6 +349,116 @@ pub fn status(config_path: &Path, fs: &dyn Fs, json: bool, out: &mut dyn Write) 
         state::describe(&snap, std::time::SystemTime::now())
     )?;
     Ok(())
+}
+
+/// `cleanup [--dry-run] [<run>]`: one cleanup pass by hand.
+///
+/// Deleting takes the state folder lock, so it cannot run beside `watch`
+/// (which runs its own pass every hour). A dry run reports without the
+/// lock when `watch` holds it, and then does not add to
+/// `cleanup-reports.jsonl`. `now` is the wall-clock time for `delete_after`.
+///
+/// Implements: SRS-DEL-001, SRS-DEL-006, SRS-CLI-001
+///
+/// # Errors
+/// [`Error::Config`] when deletion is off and no dry run was asked for, for
+/// an unknown run, or when `watch` holds the lock; [`Error::Guard`] when the
+/// share is unavailable; [`Error::Failed`] when a run was refused or the
+/// pass stopped.
+#[allow(clippy::too_many_arguments)]
+pub fn cleanup_runs(
+    config_path: &Path,
+    fs: &dyn Fs,
+    mountinfo: Option<&Path>,
+    dry_run: bool,
+    only: Option<&Path>,
+    now: std::time::SystemTime,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let loaded = config::load(config_path, fs)?;
+    for w in &loaded.warnings {
+        log::warn!("{w}");
+    }
+    let cfg = &loaded.config;
+    let Some(delete) = cleanup::mode(cfg, dry_run) else {
+        return Err(Error::Config(
+            "cleanup.delete is \"off\": nothing is deleted. Use `cleanup --dry-run` to see what would be, \
+             or set cleanup.delete to \"dry-run\" or \"on\""
+                .into(),
+        ));
+    };
+    let state_dir = &cfg.state_dir.resolved;
+    let lock = match sched::lock::InstanceLock::acquire(fs, state_dir) {
+        Ok(l) => Some(l),
+        Err(e) if delete => {
+            return Err(Error::Config(format!(
+                "{e}. `watch` deletes in its own pass every hour; stop it to clean up by hand"
+            )));
+        }
+        Err(_) => {
+            log::info!(
+                "watch is running; this dry run is not added to {}",
+                cleanup::REPORTS
+            );
+            None
+        }
+    };
+    let only = match only {
+        Some(p) => {
+            let p = fs.canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+            let id = journal::run_id(&p);
+            if !journal::Journal::list(fs, state_dir)?
+                .iter()
+                .any(|j| j.id == id)
+            {
+                return Err(Error::Config(format!(
+                    "{} has no journal in {}; it was not offloaded from this source",
+                    escape_control(&p.to_string_lossy()),
+                    escape_control(&state_dir.to_string_lossy())
+                )));
+            }
+            Some(p)
+        }
+        None => None,
+    };
+    let guard = guard_for(cfg, mountinfo);
+    guard.check(fs)?;
+    let clock: std::sync::Arc<dyn sched::Clock> = std::sync::Arc::new(sched::RealClock::new());
+    let rate = sched::rate::RateLimiter::new(
+        cfg.bandwidth.rate_limit,
+        cfg.transfer.chunk_size.max(1 << 20),
+        clock,
+    );
+    let report = cleanup::Pass {
+        cfg,
+        fs,
+        guard: &guard,
+        now,
+        delete,
+        only,
+        skip: std::collections::BTreeSet::new(),
+        rate: Some(&rate),
+        stop: None,
+        record: lock.is_some(),
+    }
+    .run()?;
+    drop(lock);
+    for r in &report.runs {
+        writeln!(
+            out,
+            "{:<12} {}: {}",
+            r.outcome.as_str(),
+            r.source,
+            escape_control(&r.reason)
+        )?;
+    }
+    writeln!(out, "{}", report.summary())?;
+    let bad = report.count(cleanup::Outcome::Refused) + report.count(cleanup::Outcome::Stopped);
+    if bad > 0 || report.stopped.is_some() {
+        Err(Error::Failed(bad.max(1)))
+    } else {
+        Ok(())
+    }
 }
 
 /// `bench`: measure the share and suggest settings.
