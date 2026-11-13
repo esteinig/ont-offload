@@ -6,7 +6,7 @@ release = "v0.4"
 text = """
 Shares the workers between runs with ready files in turn (round robin, oldest file first within a run), so no run waits behind another run's whole backlog; the per-run backlog is reported in the state snapshot.
 """
-verification = "Fake-clock test: a large and a small run; the small run completes within a bounded delay"
+verification = "Fake-clock test: two runs, one worker; both runs served in turn from the first commits"
 
 [links]
 allocated_to = ["SWI-SCHED"]

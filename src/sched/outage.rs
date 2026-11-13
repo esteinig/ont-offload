@@ -122,6 +122,23 @@ impl Event {
     }
 }
 
+/// An ongoing outage as reported in the state snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Info {
+    /// Time since it started.
+    pub duration: Duration,
+    /// Last error.
+    pub reason: String,
+    /// Failed checks.
+    pub failures: u64,
+    /// Time until the next check.
+    pub next_check: Duration,
+    /// The last check passed; waiting for stability.
+    pub recovering: bool,
+    /// `notice`, `warning` or `alert`.
+    pub level: &'static str,
+}
+
 #[derive(Debug, Clone)]
 struct Down {
     since: Duration,
@@ -170,6 +187,27 @@ impl Tracker {
     #[must_use]
     pub fn check_due(&self, now: Duration) -> bool {
         self.down.as_ref().is_some_and(|d| now >= d.next_check)
+    }
+
+    /// The ongoing outage, for the state snapshot.
+    ///
+    /// Implements: SRS-STATE-003
+    #[must_use]
+    pub fn info(&self, now: Duration) -> Option<Info> {
+        self.down.as_ref().map(|d| Info {
+            duration: now.saturating_sub(d.since),
+            reason: d.reason.clone(),
+            failures: d.failures,
+            next_check: d.next_check.saturating_sub(now),
+            recovering: d.ok_since.is_some(),
+            level: if d.alerts > 0 {
+                "alert"
+            } else if d.warned {
+                "warning"
+            } else {
+                "notice"
+            },
+        })
     }
 
     /// Current backoff (for tests and status).

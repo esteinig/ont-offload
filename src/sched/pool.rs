@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Worker pool: `workers` threads take jobs (copy one file, or write the
-//! end-of-run outputs) and report outcomes. Each worker publishes its
+//! Worker pool: `workers` threads take jobs (claim a destination on the
+//! share, copy one file, write the end-of-run outputs, or withdraw
+//! `COMPLETE` from a run that changed) and report outcomes. Each worker publishes its
 //! progress so the controller can detect stalls; all workers share one rate
 //! limiter and one pause flag.
 
@@ -22,6 +23,25 @@ use super::rate::RateLimiter;
 /// Work for one worker.
 #[derive(Debug, Clone)]
 pub enum Job {
+    /// Write the claim file in the destination run folder on the share.
+    Claim {
+        /// Run key (source run path).
+        run: PathBuf,
+        /// Destination run folder.
+        dest: PathBuf,
+        /// Run id.
+        run_id: String,
+        /// This instance's target id.
+        target_id: String,
+    },
+    /// Remove `COMPLETE` and `VERIFIED.json` from a completed run that
+    /// changed at the source.
+    Withdraw {
+        /// Run key (source run path).
+        run: PathBuf,
+        /// Destination run folder.
+        dest: PathBuf,
+    },
     /// Copy one file.
     Copy {
         /// Run key (source run path).
@@ -34,6 +54,8 @@ pub enum Job {
         dst: PathBuf,
         /// The journal records an earlier commit of this path.
         ours: bool,
+        /// Size when selected.
+        size: u64,
     },
     /// Size check, then `manifest.sha256`, `run.json` and `COMPLETE`.
     Finalise {
@@ -51,7 +73,10 @@ impl Job {
     #[must_use]
     pub fn run(&self) -> &PathBuf {
         match self {
-            Self::Copy { run, .. } | Self::Finalise { run, .. } => run,
+            Self::Copy { run, .. }
+            | Self::Finalise { run, .. }
+            | Self::Claim { run, .. }
+            | Self::Withdraw { run, .. } => run,
         }
     }
 
@@ -61,6 +86,17 @@ impl Job {
         match self {
             Self::Copy { rel, .. } => rel.clone(),
             Self::Finalise { .. } => "manifest, run.json and COMPLETE".to_owned(),
+            Self::Claim { .. } => "claim on the share".to_owned(),
+            Self::Withdraw { .. } => "withdraw COMPLETE".to_owned(),
+        }
+    }
+
+    /// File size for a copy.
+    #[must_use]
+    pub fn size(&self) -> Option<u64> {
+        match self {
+            Self::Copy { size, .. } => Some(*size),
+            _ => None,
         }
     }
 }
@@ -72,6 +108,10 @@ pub enum Done {
     Copied(Copied),
     /// The run's outputs were written.
     Finalised,
+    /// The destination is claimed for this run.
+    Claimed,
+    /// `COMPLETE` and `VERIFIED.json` were removed.
+    Withdrawn,
 }
 
 /// Why a job did not finish.
@@ -118,6 +158,8 @@ pub struct Busy {
     pub last_progress: Duration,
     /// Bytes written so far.
     pub bytes: u64,
+    /// File size for a copy.
+    pub total: Option<u64>,
 }
 
 type Slot = Mutex<Option<Busy>>;
@@ -185,6 +227,19 @@ fn work(shared: &Shared, idx: usize, job: &Job) -> Result<Done, Failure> {
                 .map(|()| Done::Finalised)
                 .map_err(Failure::Finalise)
         }
+        Job::Claim {
+            run,
+            dest,
+            run_id,
+            target_id,
+        } => {
+            crate::journal::claim_on_share(&*shared.fs, &shared.guard, dest, run, run_id, target_id)
+                .map(|()| Done::Claimed)
+                .map_err(Failure::Copy)
+        }
+        Job::Withdraw { dest, .. } => finalise::withdraw(&*shared.fs, &shared.guard, dest)
+            .map(|()| Done::Withdrawn)
+            .map_err(Failure::Finalise),
     }
 }
 
@@ -260,6 +315,7 @@ impl Pool {
                             started: now,
                             last_progress: now,
                             bytes: 0,
+                            total: job.size(),
                         });
                         let t0 = std::time::Instant::now();
                         let result = work(&shared, idx, &job);

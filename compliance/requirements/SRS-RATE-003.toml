@@ -1,0 +1,13 @@
+id = "SRS-RATE-003"
+type = "requirement"
+title = "Rate limit reload"
+status = "draft"
+release = "v0.4"
+text = """
+On SIGHUP, watch re-reads the configuration file and applies a changed bandwidth.rate_limit to all workers without a restart; a file that fails validation changes nothing and is logged as an error; other changed settings are logged as needing a restart.
+"""
+verification = "Fake-clock test: limit changed through the reload flag; invalid file keeps the old limit"
+
+[links]
+allocated_to = ["SWI-SCHED", "SWI-CLI"]
+mitigates = []
