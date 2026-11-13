@@ -37,6 +37,9 @@ pub struct RawConfig {
     pub dest_root: String,
     /// Expected content of `dest_root/.ont-offload-target`.
     pub target_id: String,
+    /// Which MinKNOW level becomes the top folder under `dest_root`.
+    #[serde(default)]
+    pub dest_starts_at: DestLevel,
     /// Journal and state directory.
     #[serde(default = "d_state_dir")]
     pub state_dir: String,
@@ -72,6 +75,31 @@ fn d_state_dir() -> String {
 
 fn strings(v: &[&str]) -> Vec<String> {
     v.iter().map(|s| (*s).to_owned()).collect()
+}
+
+/// Level of the MinKNOW structure that becomes the top folder under `dest_root`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DestLevel {
+    /// `dest_root/<experiment>/<sample>/<run>/` (default; with `any-depth`, the whole path below the root).
+    #[default]
+    Experiment,
+    /// `dest_root/<sample>/<run>/`
+    Sample,
+    /// `dest_root/<run>/`
+    Run,
+}
+
+impl DestLevel {
+    /// Setting value as written in the configuration.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Experiment => "experiment",
+            Self::Sample => "sample",
+            Self::Run => "run",
+        }
+    }
 }
 
 /// Where runs are found and how they are recognised.
@@ -469,6 +497,8 @@ pub struct Config {
     pub dest_root: CheckedPath,
     /// Destination target id.
     pub target_id: String,
+    /// Top destination level.
+    pub dest_starts_at: DestLevel,
     /// State directory.
     pub state_dir: CheckedPath,
     /// Source settings.
@@ -675,14 +705,14 @@ impl Check {
                 );
                 continue;
             }
-            if file_names_only && pat.contains('/') {
+            if file_names_only && pat.trim_end_matches('/').contains('/') {
                 self.problem(
                     &k,
                     format!("{pat:?} must be a file name pattern without \"/\""),
                 );
                 continue;
             }
-            if let Err(e) = globset::Glob::new(pat) {
+            if let Err(e) = globset::Glob::new(pat.trim_end_matches('/')) {
                 self.problem(&k, format!("invalid pattern {pat:?}: {e}"));
             }
         }
@@ -1001,6 +1031,7 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
         config: Config {
             dest_root,
             target_id: raw.target_id.clone(),
+            dest_starts_at: raw.dest_starts_at,
             state_dir,
             source: Source {
                 root,
@@ -1061,6 +1092,7 @@ impl Config {
     ///
     /// Implements: SRS-CFG-004
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn summary(&self) -> String {
         let mut s = String::new();
         let path = |p: &CheckedPath| {
@@ -1106,6 +1138,18 @@ impl Config {
                     path(&self.dest_root),
                     self.dest_root.dev,
                     self.target_id
+                ),
+            ),
+            (
+                "dest_starts_at",
+                format!(
+                    "{} (runs go to dest_root/{})",
+                    self.dest_starts_at.as_str(),
+                    match self.dest_starts_at {
+                        DestLevel::Experiment => "<experiment>/<sample>/<run>/",
+                        DestLevel::Sample => "<sample>/<run>/",
+                        DestLevel::Run => "<run>/",
+                    }
                 ),
             ),
             ("state_dir", path(&self.state_dir)),

@@ -33,6 +33,10 @@ pub enum Error {
     #[error("{0} file(s) or run(s) failed")]
     Failed(usize),
 
+    /// The destination guard refused (share not mounted, wrong share, path changed).
+    #[error("{0}")]
+    Guard(String),
+
     /// An integrity mismatch could not be resolved.
     #[error("integrity mismatch: {0}")]
     Integrity(String),
@@ -80,7 +84,7 @@ impl Error {
     #[must_use]
     pub fn exit_code(&self) -> u8 {
         match self {
-            Self::Config(_) => exit::CONFIG,
+            Self::Config(_) | Self::Guard(_) => exit::CONFIG,
             Self::Failed(_) => exit::FAILED,
             Self::Integrity(_) => exit::INTEGRITY,
             Self::RestartNeeded(_) => exit::RESTART,
@@ -100,6 +104,7 @@ mod tests {
     #[test]
     fn exit_codes_match_documentation() {
         assert_eq!(Error::Config("x".into()).exit_code(), 2);
+        assert_eq!(Error::Guard("x".into()).exit_code(), 2);
         assert_eq!(Error::Failed(1).exit_code(), 3);
         assert_eq!(Error::Integrity("x".into()).exit_code(), 4);
         assert_eq!(Error::RestartNeeded("x".into()).exit_code(), 75);

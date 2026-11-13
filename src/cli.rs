@@ -92,7 +92,7 @@ pub enum Command {
     Run {
         /// Run folder.
         path: PathBuf,
-        /// The run has already finished; start at reconciliation.
+        /// Treat the run as finished even without a complete marker (`final_summary`).
         #[arg(long)]
         completed: bool,
     },
@@ -100,7 +100,7 @@ pub enum Command {
     Verify {
         /// Run folder on the destination.
         run: PathBuf,
-        /// Also re-hash the source copy.
+        /// Also re-hash the source run recorded in run.json.
         #[arg(long)]
         source: bool,
     },
