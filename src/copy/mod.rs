@@ -91,6 +91,8 @@ pub enum CopyFail {
     Conflict(String),
     /// The guard failed; stop writing.
     Guard(Error),
+    /// Writes were paused (outage) or the copy was asked to stop; not an attempt.
+    Paused,
     /// An I/O error.
     Io(std::io::Error),
 }
@@ -99,6 +101,7 @@ impl std::fmt::Display for CopyFail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Retry(m) | Self::Conflict(m) => f.write_str(m),
+            Self::Paused => f.write_str("paused"),
             Self::Guard(e) => write!(f, "{e}"),
             Self::Io(e) => write!(f, "{e}"),
         }
@@ -145,6 +148,42 @@ fn fill(r: &mut dyn Read, buf: &mut [u8]) -> std::io::Result<usize> {
     Ok(n)
 }
 
+/// Called by [`copy_file_with`] before each chunk is written: rate limiting,
+/// progress for stall detection, and pausing.
+pub trait Hooks {
+    /// `n` bytes are about to be written. An error stops the copy (the temp
+    /// file is removed).
+    ///
+    /// # Errors
+    /// Usually [`CopyFail::Paused`].
+    fn chunk(&self, n: usize) -> Result<(), CopyFail>;
+}
+
+/// No hooks.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoHooks;
+
+impl Hooks for NoHooks {
+    fn chunk(&self, _n: usize) -> Result<(), CopyFail> {
+        Ok(())
+    }
+}
+
+/// [`copy_file_with`] without hooks.
+///
+/// # Errors
+/// See [`CopyFail`].
+pub fn copy_file(
+    fs: &dyn Fs,
+    guard: &Guard,
+    src: &Path,
+    dest: &Path,
+    ours: bool,
+    opts: &CopyOptions,
+) -> Result<Copied, CopyFail> {
+    copy_file_with(fs, guard, src, dest, ours, opts, &NoHooks)
+}
+
 /// Copy one file and commit it under its final name.
 ///
 /// `ours` says the journal records a previous commit of this path by
@@ -156,13 +195,14 @@ fn fill(r: &mut dyn Read, buf: &mut [u8]) -> std::io::Result<usize> {
 /// # Errors
 /// See [`CopyFail`].
 #[allow(clippy::too_many_lines)]
-pub fn copy_file(
+pub fn copy_file_with(
     fs: &dyn Fs,
     guard: &Guard,
     src: &Path,
     dest: &Path,
     ours: bool,
     opts: &CopyOptions,
+    hooks: &dyn Hooks,
 ) -> Result<Copied, CopyFail> {
     let shown = escape_control(&dest.to_string_lossy());
     let s0 = fs.symlink_metadata(src)?;
@@ -216,6 +256,7 @@ pub fn copy_file(
             if n == 0 {
                 break;
             }
+            hooks.chunk(n)?;
             h.update(&buf[..n]);
             out.write_all(&buf[..n])?;
             total += n as u64;

@@ -7,6 +7,8 @@
 //! - [`select`] lists the files of a run to copy, without following symlinks.
 //! - [`offload`] copies one completed run and writes its manifest.
 
+pub mod finalise;
+pub mod lifecycle;
 pub mod offload;
 pub mod select;
 
