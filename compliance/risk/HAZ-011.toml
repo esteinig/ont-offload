@@ -8,6 +8,7 @@ severity = "minor"
 probability_before = "occasional"
 # Known limitation (v0.3), documented in the user guide under "Known limitations".
 # v0.3: no fairness between runs; per-run backlog is only in the log. SRS-PAR-003 (v0.4) shares workers fairly and SRS-STATE-001 shows each run's backlog.
+# v0.4: SRS-PAR-003 (round robin across runs) and SRS-STATE-001 (per-run backlog and ETA in state.json) implemented and verified. Proposed residual probability once reviewed: remote.
 # Residual probability is set when the risk controls are verified.
 probability_after = ""
 
