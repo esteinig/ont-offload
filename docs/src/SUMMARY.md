@@ -6,6 +6,7 @@
 
 - [Installation](user-guide/installation.md)
 - [Usage](user-guide/usage.md)
+- [Offloading a run](user-guide/offload.md)
 - [Configuration](user-guide/configuration.md)
 - [Run simulator](user-guide/simulator.md)
 
