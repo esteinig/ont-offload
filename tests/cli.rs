@@ -42,8 +42,8 @@ fn unknown_subcommand_is_a_usage_error() {
 /// Verifies: SRS-CLI-004
 #[test]
 fn unimplemented_command_exits_1_with_plan() {
-    bin().arg("watch").assert().code(1).stderr(
-        predicate::str::contains("not implemented yet").and(predicate::str::contains("v0.3")),
+    bin().arg("status").assert().code(1).stderr(
+        predicate::str::contains("not implemented yet").and(predicate::str::contains("v0.4")),
     );
 }
 

@@ -157,6 +157,17 @@ impl Guard {
         Ok(())
     }
 
+    /// The target named by a readable sentinel that differs from ours: a
+    /// share that is mounted but belongs to another target.
+    ///
+    /// Implements: SRS-RES-006
+    #[must_use]
+    pub fn wrong_target(&self, fs: &dyn Fs) -> Option<String> {
+        let bytes = fs.read(&self.resolved.join(SENTINEL)).ok()?;
+        let found = String::from_utf8_lossy(&bytes).trim().to_owned();
+        (found != self.target_id).then_some(found)
+    }
+
     /// Run every guard check.
     ///
     /// Implements: SRS-GRD-001, SRS-GRD-002, SRS-GRD-003

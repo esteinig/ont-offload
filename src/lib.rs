@@ -44,6 +44,12 @@ pub fn execute(cli: &Cli) -> Result<()> {
             run_one(&cli.global.config, &RealFs, None, path, *completed, out)
         }
         Command::Verify { run, source } => verify_run(&RealFs, run, *source, out),
+        Command::Watch { until_idle } => watch(
+            &cli.global.config,
+            std::sync::Arc::new(RealFs),
+            None,
+            *until_idle,
+        ),
         other => Err(Error::NotImplemented {
             command: other.name(),
             planned: other.planned(),
@@ -168,6 +174,7 @@ pub fn run_one(
         ))
     })?;
     let guard = guard_for(cfg, mountinfo);
+    let _lock = sched::lock::InstanceLock::acquire(fs, &cfg.state_dir.resolved)?;
     let report = run::offload(cfg, fs, &guard, &detected, completed)?;
     writeln!(
         out,
@@ -222,4 +229,62 @@ pub fn verify_run(fs: &dyn Fs, run: &Path, source: bool, out: &mut dyn Write) ->
         }
     )?;
     Ok(())
+}
+
+/// `watch [--until-idle]`: the offload daemon.
+///
+/// Takes the state folder lock, then runs the controller until stopped. The
+/// journal is consistent at every moment, so stopping the process (SIGTERM,
+/// SIGKILL, power loss) is always safe; the next start resumes.
+///
+/// Implements: SRS-RES-007, SRS-PAR-001, SRS-RES-006
+///
+/// # Errors
+/// [`Error::Config`] or [`Error::Guard`] at start-up, [`Error::RestartNeeded`]
+/// when every worker is stalled, [`Error::Failed`] with `until_idle`.
+pub fn watch(
+    config_path: &Path,
+    fs: std::sync::Arc<dyn Fs>,
+    mountinfo: Option<&Path>,
+    until_idle: bool,
+) -> Result<()> {
+    let loaded = config::load(config_path, &*fs)?;
+    for w in &loaded.warnings {
+        log::warn!("{w}");
+    }
+    let cfg = loaded.config;
+    let _lock = sched::lock::InstanceLock::acquire(&*fs, &cfg.state_dir.resolved)?;
+    let guard = std::sync::Arc::new(guard_for(&cfg, mountinfo));
+    log::info!(
+        "watching {} -> {} ({} worker(s), rate limit {}, settle {}, settle after complete {})",
+        escape_control(&cfg.source.root.resolved.to_string_lossy()),
+        escape_control(&cfg.dest_root.resolved.to_string_lossy()),
+        cfg.bandwidth.workers,
+        cfg.bandwidth
+            .rate_limit
+            .bytes_per_sec()
+            .map_or_else(|| "none".to_owned(), |b| format!("{b} B/s")),
+        humantime::format_duration(cfg.transfer.settle),
+        humantime::format_duration(cfg.transfer.settle_after_complete),
+    );
+    // Rescan at least twice per settle window, at most every 10 s.
+    let scan_every = (cfg.transfer.settle / 2).clamp(
+        std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(10),
+    );
+    let opts = sched::watch::Options {
+        until_idle,
+        scan_every,
+        tick: scan_every.min(std::time::Duration::from_secs(1)),
+        ..sched::watch::Options::default()
+    };
+    let mut w = sched::watch::Watcher::new(
+        cfg,
+        fs,
+        guard,
+        std::sync::Arc::new(sched::RealClock::new()),
+        opts,
+        sched::notify::Notifier::from_env(),
+    )?;
+    w.run()
 }
