@@ -18,6 +18,7 @@ pub const OFFLOAD_FILES: &[&str] = &[
     "COMPLETE",
     "VERIFIED.json",
     ".ont-offload-claim.json",
+    "DELETED.json",
 ];
 
 /// Result of a comparison.

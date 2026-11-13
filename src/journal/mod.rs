@@ -31,8 +31,10 @@ pub const RUN_JSON: &str = "run.json";
 pub const COMPLETE: &str = "COMPLETE";
 /// Name of the verification receipt.
 pub const VERIFIED: &str = "VERIFIED.json";
+/// Name of the deletion record, written after the source run was deleted.
+pub const DELETED: &str = "DELETED.json";
 /// Top-level names ont-offload writes into a destination run folder.
-pub const RESERVED_NAMES: &[&str] = &[MANIFEST, RUN_JSON, COMPLETE, VERIFIED, SHARE_CLAIM];
+pub const RESERVED_NAMES: &[&str] = &[MANIFEST, RUN_JSON, COMPLETE, VERIFIED, SHARE_CLAIM, DELETED];
 
 /// Claim file in each destination run folder (SRS-SEL-008).
 pub const SHARE_CLAIM: &str = ".ont-offload-claim.json";
@@ -115,6 +117,17 @@ pub enum Record {
         /// When.
         ts: String,
     },
+    /// Gated deletion of the source run started: from here on the run is
+    /// never offloaded again.
+    Deleting {
+        /// When.
+        ts: String,
+    },
+    /// Every listed source file was deleted and `DELETED.json` written.
+    Deleted {
+        /// When.
+        ts: String,
+    },
 }
 
 /// A committed file as recorded in the journal.
@@ -142,6 +155,10 @@ pub struct Journal {
     pub complete: Option<String>,
     /// When the run was completed (RFC 3339), if complete.
     pub completed_at: Option<String>,
+    /// When gated deletion of the source started (RFC 3339), if it did.
+    pub deleting: Option<String>,
+    /// When gated deletion finished (RFC 3339), if it did.
+    pub deleted_at: Option<String>,
     records: usize,
 }
 
@@ -163,6 +180,8 @@ impl Journal {
             files: BTreeMap::new(),
             complete: None,
             completed_at: None,
+            deleting: None,
+            deleted_at: None,
             records: 0,
         };
         let text = match fs.read(&j.path()) {
@@ -191,6 +210,42 @@ impl Journal {
             }
         }
         Ok(j)
+    }
+
+    /// Every journal in `state_dir`, found through the source recorded in
+    /// its claim (journals without a claim are skipped). Used by cleanup,
+    /// which must also find runs whose run marker it already deleted.
+    ///
+    /// Implements: SRS-DEL-002
+    ///
+    /// # Errors
+    /// I/O errors listing `state_dir/runs`; a corrupt journal.
+    pub fn list(fs: &dyn Fs, state_dir: &Path) -> Result<Vec<Self>> {
+        let runs = state_dir.join("runs");
+        let entries = match fs.read_dir(&runs) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut out = Vec::new();
+        for e in entries {
+            let path = runs.join(&e.name).join("journal.jsonl");
+            let Ok(bytes) = fs.read(&path) else { continue };
+            let text = String::from_utf8_lossy(&bytes);
+            let source = text
+                .lines()
+                .find_map(|l| match serde_json::from_str::<Record>(l) {
+                    Ok(Record::Claim { source, .. }) => Some(source),
+                    _ => None,
+                });
+            if let Some(source) = source {
+                let j = Self::open(fs, state_dir, Path::new(&source))?;
+                if j.id == e.name.to_string_lossy() {
+                    out.push(j);
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// Records in the journal file (for compaction and tests).
@@ -241,6 +296,14 @@ impl Journal {
             })?;
             n += 1;
         }
+        if let Some(ts) = &self.deleting {
+            push(&Record::Deleting { ts: ts.clone() })?;
+            n += 1;
+        }
+        if let Some(ts) = &self.deleted_at {
+            push(&Record::Deleted { ts: ts.clone() })?;
+            n += 1;
+        }
         write_atomic(fs, &self.dir, "journal.jsonl", &out)?;
         self.records = n;
         Ok(())
@@ -288,6 +351,8 @@ impl Journal {
                 self.complete = None;
                 self.completed_at = None;
             }
+            Record::Deleting { ts } => self.deleting = Some(ts),
+            Record::Deleted { ts } => self.deleted_at = Some(ts),
         }
     }
 

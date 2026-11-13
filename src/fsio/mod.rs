@@ -169,6 +169,15 @@ pub trait Fs: Send + Sync {
     /// Returns the operating system error.
     fn remove_file(&self, path: &Path) -> io::Result<()>;
 
+    /// Remove an empty directory.
+    ///
+    /// # Errors
+    /// Returns the operating system error (also when the directory is not
+    /// empty); unsupported by default.
+    fn remove_dir(&self, _path: &Path) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+
     /// Create a directory and its missing parents.
     ///
     /// # Errors
@@ -248,6 +257,10 @@ impl Fs for RealFs {
 
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         fs::remove_file(path)
+    }
+
+    fn remove_dir(&self, path: &Path) -> io::Result<()> {
+        fs::remove_dir(path)
     }
 
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
