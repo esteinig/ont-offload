@@ -1,0 +1,14 @@
+id = "HAZ-018"
+type = "hazard"
+title = "Log lost or local disk filled by the log"
+status = "draft"
+cause = "The log file is never rotated, or is rotated by renaming while the daemon keeps writing to the renamed file, or is rotated with copytruncate"
+harm = "No record to investigate a failure; a full local disk on the sequencer can stop acquisition and the offload"
+severity = "serious"
+probability_before = "occasional"
+# v0.7: the log follows its name after a rotation (SRS-LOG-005, unit-tested with rename and removal) and packaging/ont-offload.logrotate rotates weekly or at 100 MB, keeping 12 compressed files; the service logs to its own folder (SRS-DEP-001). Proposed residual probability once reviewed: remote.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-LOG-005", "SRS-DEP-001"]

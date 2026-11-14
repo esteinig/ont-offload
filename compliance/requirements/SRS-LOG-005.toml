@@ -1,0 +1,13 @@
+id = "SRS-LOG-005"
+type = "requirement"
+title = "Log file follows rotation"
+status = "draft"
+release = "v0.7"
+text = """
+The log file (logging.file) is reopened by name within one second of the next log line after it is renamed or removed, so logrotate needs neither a signal nor copytruncate and a rotated file stops growing; a new log file is created with mode 0640. A logrotate configuration is shipped in packaging/.
+"""
+verification = "Unit: rename, removal and a vanished folder; packaging test: logrotate without copytruncate"
+
+[links]
+allocated_to = ["SWI-LOG"]
+mitigates = ["HAZ-018"]

@@ -1,0 +1,14 @@
+id = "HAZ-019"
+type = "hazard"
+title = "Copies unreadable or writes refused because of user mapping"
+status = "draft"
+cause = "The service runs as root on an NFS export with root_squash, or as a user the share maps to another owner, or on a share that ignores file modes"
+harm = "Offload fails at the first write, or the receiving side cannot read the copies; result delayed"
+severity = "minor"
+probability_before = "probable"
+# v0.7: the unit runs as the dedicated user ont-offload (SRS-DEP-001); check-config writes a probe file as that user and reports the owner and mode the share gives it, warning about root, squashed owners and lost modes (SRS-GRD-004). The deployment guide makes the probe and a read check from the receiving side part of installation. Proposed residual probability once reviewed: remote.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-GRD-004", "SRS-DEP-001"]
