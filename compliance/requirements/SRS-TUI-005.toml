@@ -1,0 +1,13 @@
+id = "SRS-TUI-005"
+type = "requirement"
+title = "Event and log tails"
+status = "draft"
+release = "v0.6"
+text = """
+The event tail starts near the end of the file at a line boundary, follows rotation to events.jsonl.1 without losing or repeating events, reads again from the start after truncation, holds back a torn last line, and shows gaps in seq, unreadable lines and daemon restarts as counts.
+"""
+verification = "Unit with rotation, truncation, torn-line and sequence-gap fixtures"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-015"]

@@ -1,0 +1,13 @@
+id = "SRS-TUI-006"
+type = "requirement"
+title = "Progress and completion as the snapshot gives them"
+status = "draft"
+release = "v0.6"
+text = """
+Phase, file counts, bytes, backlog, ETA, failed files and errors of each run are shown as the snapshot gives them, never derived; a run shows as complete only with phase complete and a manifest digest (otherwise "complete?"), and failed files and errors are always shown on the run's line.
+"""
+verification = "Render tests from schema-valid snapshots; unit test of the run line"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-016"]

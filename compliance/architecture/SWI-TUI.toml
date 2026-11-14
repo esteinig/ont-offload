@@ -1,0 +1,9 @@
+id = "SWI-TUI"
+type = "software-item"
+title = "Monitoring dashboard"
+status = "draft"
+safety_class = "B"
+paths = ["src/tui/"]
+description = """
+Read-only terminal dashboard (`ont-offload tui`, Ratatui behind the `tui` build feature): reads state.json, events.jsonl, cleanup-reports.jsonl and the log file, shows staleness and alerts, and resolves its settings from flags, environment and configuration. Class B: it is a supplementary alert path for silent stalls and failures (HAZ-007, HAZ-014 to HAZ-016) and must not interfere with the offload (HAZ-017). notify_command stays the primary alert path.
+"""

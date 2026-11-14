@@ -1,0 +1,13 @@
+id = "SRS-TUI-002"
+type = "requirement"
+title = "Stale and missing data shown as such"
+status = "draft"
+release = "v0.6"
+text = """
+A snapshot older than three intervals (at least 30 s), missing or unreadable is shown as STALE or NO DATA over the whole screen, with the time of the last good snapshot; the last values stay visible but dimmed, nothing is called OK, and the header shows the snapshot age and the clock ticking.
+"""
+verification = "Unit on an injected clock (live at 30 s, stale at 31 s); render tests of the stale and no-data screens"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-014"]

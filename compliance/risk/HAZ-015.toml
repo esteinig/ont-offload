@@ -1,0 +1,14 @@
+id = "HAZ-015"
+type = "hazard"
+title = "Failure not noticed on the dashboard"
+status = "draft"
+cause = "An alert scrolls away, is hidden by a theme, colour or animation, is lost across event rotation, or is filtered out"
+harm = "A failed file or outage goes unhandled; result delayed"
+severity = "minor"
+probability_before = "occasional"
+# v0.6: alerts stay in the banner until acknowledged even after they clear (SRS-TUI-003), severity is a word and a symbol in every theme with checked contrast (SRS-TUI-004), the event tail follows rotation and shows gaps (SRS-TUI-005), decoration stops while an alert is open (SRS-TUI-008), and the event filter never hides the alerts panel or banner. The dashboard is supplementary: notify_command (SRS-STATE-003) remains the alert path that reaches a person when nobody is watching, as the user guide says. Proposed residual probability once reviewed: remote.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-TUI-003", "SRS-TUI-004", "SRS-TUI-005", "SRS-TUI-008", "SRS-STATE-003"]

@@ -1,0 +1,13 @@
+id = "SRS-TUI-003"
+type = "requirement"
+title = "Alerts shown until acknowledged"
+status = "draft"
+release = "v0.6"
+text = """
+Every alert in the snapshot and every alerting event is shown in the alerts panel until a current snapshot clears it; a new one raises a banner and, when the bell is on, rings the terminal bell once. Cleared alerts stay in the banner until acknowledged, so a short failure is not missed; acknowledging hides the banner on that screen only. A stale snapshot neither raises nor clears alerts.
+"""
+verification = "Unit: snapshot and event alerts, clearing, acknowledgement, bell count; render test of the banner"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-015"]

@@ -1,0 +1,14 @@
+id = "HAZ-016"
+type = "hazard"
+title = "Misleading progress or completion"
+status = "draft"
+cause = "The display derives its own totals, maps an event to the wrong run, shows a full gauge while files failed, or reads a snapshot of another version"
+harm = "Analysis started on an incomplete run"
+severity = "serious"
+probability_before = "remote"
+# v0.6: values are shown as the snapshot gives them; complete only with phase complete and a manifest digest, failed files and errors always on the run's line (SRS-TUI-006); other schema versions are refused before any field is read (SRS-TUI-007). A newer daemon with extra snapshot fields shows NO DATA rather than partial values: use the dashboard of the same version (documented limitation). Proposed residual probability once reviewed: improbable.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-TUI-006", "SRS-TUI-007"]

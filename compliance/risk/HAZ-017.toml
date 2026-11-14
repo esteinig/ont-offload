@@ -1,0 +1,14 @@
+id = "HAZ-017"
+type = "hazard"
+title = "Dashboard interferes with the offload"
+status = "draft"
+cause = "The dashboard writes or locks in state_dir, polls heavily on the sequencer, or its terminal output blocks a shared process"
+harm = "Offload delayed or failed"
+severity = "minor"
+probability_before = "remote"
+# v0.6: the dashboard is a separate process that opens files read-only, takes no lock, reads at most 1 MiB per file per refresh with a refresh of at least 200 ms, and starts its tails at most 64 KiB from the end; verified with every write operation failing and the state folder compared before and after (SRS-TUI-001). Console logging is limited to errors while it owns the terminal. Proposed residual probability once reviewed: improbable.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-TUI-001", "SRS-TUI-009"]

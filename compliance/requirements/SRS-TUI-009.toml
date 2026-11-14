@@ -1,0 +1,13 @@
+id = "SRS-TUI-009"
+type = "requirement"
+title = "Launch settings from flags, environment and configuration"
+status = "draft"
+release = "v0.6"
+text = """
+Each dashboard setting (state folder, log file, theme, refresh, bell) is taken from its flag, else its environment variable (ONT_OFFLOAD_STATE_DIR, ONT_OFFLOAD_TUI_LOG, ONT_OFFLOAD_TUI_THEME, ONT_OFFLOAD_TUI_REFRESH, ONT_OFFLOAD_TUI_BELL; ONT_OFFLOAD_CONFIG for the configuration file), else the configuration file, else the default; a bad value is a configuration error naming its source. `tui --check` and the sources screen (s) show each setting, where it came from and whether each file can be read.
+"""
+verification = "Unit: precedence and origins, missing configuration, bad values; integration: tui --check through the binary with environment variables"
+
+[links]
+allocated_to = ["SWI-TUI", "SWI-CLI"]
+mitigates = ["HAZ-014", "HAZ-017"]
