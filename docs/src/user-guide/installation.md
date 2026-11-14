@@ -13,8 +13,10 @@ sudo install -m 0755 ont-offload-vX.Y.Z-x86_64-unknown-linux-gnu/ont-offload /us
 ## From source
 
 ```sh
-cargo install --locked --git https://github.com/esteinig/ont-offload --tag vX.Y.Z ont-offload
+cargo install --locked --features tui --git https://github.com/esteinig/ont-offload --tag vX.Y.Z ont-offload
 ```
+
+`--features tui` adds the [monitoring dashboard](tui.md); leave it out for a binary without it. The release binaries include it.
 
 ## As a service
 
