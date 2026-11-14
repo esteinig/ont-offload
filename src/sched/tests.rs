@@ -1156,9 +1156,11 @@ fn seed_run(env: &Env) -> PathBuf {
 
 /// The v0.4 acceptance soak on the fake clock: 24 h of replayed content in
 /// two overlapping runs, with an outage, an error burst and the state file
-/// checked against the schema throughout.
+/// checked against the schema throughout. The dashboard model reads the
+/// state folder every 5 simulated minutes, as `tui` would, and must show
+/// every alerting event by the next refresh and never call the data stale.
 ///
-/// Verifies: SRS-LIVE-001, SRS-LIVE-003, SRS-PAR-003, SRS-RES-002, SRS-RES-008, SRS-RES-009, SRS-STATE-001, SRS-STATE-002, SRS-STATE-003
+/// Verifies: SRS-LIVE-001, SRS-LIVE-003, SRS-PAR-003, SRS-RES-002, SRS-RES-008, SRS-RES-009, SRS-STATE-001, SRS-STATE-002, SRS-STATE-003, SRS-TUI-002, SRS-TUI-003, SRS-TUI-005
 #[test]
 fn replay_soak_24h_offloads_exactly_with_valid_state() {
     let env = Env::new();
@@ -1175,7 +1177,36 @@ fn replay_soak_24h_offloads_exactly_with_valid_state() {
     let total = engine.total_seconds() as u64;
     let fs = env.fs.clone();
     let mut checked = 0;
+    let mut dash = crate::tui::model::Model::new(&env.p("state"), None);
+    let mut shown: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut due: Vec<String> = Vec::new();
+    let mut saw_outage_alert = false;
     drive(&env, &mut w, &mut engine, 0, total + 1800, 60, |t, w| {
+        if t > 0 && t % 300 == 0 {
+            // The snapshot and events carry wall-clock times, so the
+            // dashboard reads them at the real time.
+            dash.refresh(&RealFs, std::time::SystemTime::now());
+            assert!(
+                dash.health.as_ref().unwrap().live(),
+                "t={t}: {:?}",
+                dash.health
+            );
+            shown.extend(
+                dash.alerts
+                    .iter()
+                    .chain(&dash.cleared)
+                    .map(|a| a.key.clone()),
+            );
+            saw_outage_alert |= dash.alerts.iter().any(|a| a.kind == Kind::OutageAlert);
+            for k in &due {
+                assert!(shown.contains(k), "t={t}: alert {k} not shown");
+            }
+            due = events(&env)
+                .iter()
+                .filter(|e| e.kind.alerts())
+                .map(|e| format!("event:{}:{}", e.ts, e.seq))
+                .collect();
+        }
         match t {
             // A 2 h outage in the night.
             36_000 => fs.add(Rule::always(
@@ -1220,6 +1251,12 @@ fn replay_soak_24h_offloads_exactly_with_valid_state() {
         assert!(k.contains(&want), "{want:?} missing");
     }
     assert_schema_valid(&mut w, &env, s(total + 1800));
+    assert!(saw_outage_alert, "the outage alert was on the dashboard");
+    assert!(
+        dash.alerts.iter().all(|a| a.kind != Kind::OutageAlert),
+        "and cleared"
+    );
+    assert_eq!(dash.missed_events, 0);
 }
 
 // ---------------------------------------------------------------------

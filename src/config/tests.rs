@@ -351,3 +351,42 @@ fn load_reports_file_and_count() {
             .contains("cannot read")
     );
 }
+
+/// Verifies: SRS-TUI-008
+#[test]
+fn tui_section_is_validated_and_read_without_path_checks() {
+    let env = Env::new();
+    let ok = env.toml("[tui]\ntheme = \"synthwave\"\nrefresh = \"2s\"\nbell = false");
+    let p = env.dir.path().join("ok.toml");
+    std::fs::write(&p, &ok).unwrap();
+    let t = tui_settings(&p, &env.fs).unwrap();
+    assert_eq!(t.theme, TuiTheme::Synthwave);
+    assert_eq!(t.refresh, Duration::from_secs(2));
+    assert!(!t.bell);
+    assert!(
+        env.problems(&env.toml("[tui]\nrefresh = \"50ms\""))
+            .contains("tui.refresh")
+    );
+    assert!(parse("dest_root = \"/x\"\ntarget_id = \"t\"\nstate_dir = \"/s\"\n[source]\nroot = \"/d\"\n[tui]\ntheme = \"neon\"\n").is_err());
+    for (text, ok) in [
+        ("200ms", true),
+        ("60s", true),
+        ("199ms", false),
+        ("61s", false),
+        ("x", false),
+    ] {
+        assert_eq!(tui_refresh(text).is_ok(), ok, "{text}");
+    }
+    // The dashboard starts on a configuration whose paths are gone.
+    let gone = "dest_root = \"/absent/share\"\ntarget_id = \"t\"\nstate_dir = \"/absent/state\"\n[source]\nroot = \"/absent/data\"\n";
+    let p = env.dir.path().join("gone.toml");
+    std::fs::write(&p, gone).unwrap();
+    assert_eq!(
+        tui_settings(&p, &env.fs).unwrap().state_dir,
+        PathBuf::from("/absent/state")
+    );
+    assert!(
+        load(&p, &env.fs).is_err(),
+        "while the daemon would refuse it"
+    );
+}

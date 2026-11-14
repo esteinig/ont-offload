@@ -79,3 +79,10 @@ allowed_fstypes = ["nfs", "nfs4", "cifs", "smb3"]
 [logging]
 file = "/var/log/ont-offload/ont-offload.log"
 format = "text"                  # or "json"
+
+[tui]
+# The read-only dashboard (`ont-offload tui`). It reads state_dir and
+# logging.file from this file; flags and ONT_OFFLOAD_* variables override.
+theme = "plain"                  # "plain", "matrix", "phosphor" or "synthwave"
+refresh = "1s"                   # 200ms to 60s
+bell = true                      # ring the terminal bell on a new alert

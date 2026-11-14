@@ -136,6 +136,50 @@ pub enum Command {
         /// Limit to one run folder.
         run: Option<PathBuf>,
     },
+    /// Read-only dashboard of the daemon's state, events and alerts.
+    ///
+    /// Each setting comes from its flag, else its environment variable,
+    /// else the `[tui]` section of the configuration file, else the
+    /// default; `--check` prints what was chosen and from where.
+    Tui {
+        /// State folder of the daemon [env: `ONT_OFFLOAD_STATE_DIR`].
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        /// The daemon's log file, shown in the log pane [env: `ONT_OFFLOAD_TUI_LOG`].
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Theme: plain, matrix, phosphor or synthwave [env: `ONT_OFFLOAD_TUI_THEME`].
+        #[arg(long)]
+        theme: Option<String>,
+        /// Refresh interval, 200ms to 60s [env: `ONT_OFFLOAD_TUI_REFRESH`].
+        #[arg(long)]
+        refresh: Option<String>,
+        /// Ring the terminal bell on a new alert [env: `ONT_OFFLOAD_TUI_BELL`].
+        #[arg(long, value_enum)]
+        bell: Option<Switch>,
+        /// Print the settings, where each came from and whether each file
+        /// can be read, then exit.
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+/// On or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Switch {
+    /// On.
+    On,
+    /// Off.
+    Off,
+}
+
+impl Command {
+    /// The command takes over the terminal (console logging would draw
+    /// over it).
+    #[must_use]
+    pub fn is_fullscreen(&self) -> bool {
+        matches!(self, Self::Tui { check: false, .. })
+    }
 }
 
 impl Command {
@@ -150,6 +194,7 @@ impl Command {
             Self::CheckConfig => "check-config",
             Self::Bench { .. } => "bench",
             Self::Cleanup { .. } => "cleanup",
+            Self::Tui { .. } => "tui",
         }
     }
 
@@ -162,6 +207,7 @@ impl Command {
             Self::Watch { .. } => "v0.3",
             Self::Status { .. } | Self::Bench { .. } => "v0.4",
             Self::Cleanup { .. } => "v0.5",
+            Self::Tui { .. } => "v0.6",
         }
     }
 }
@@ -198,6 +244,22 @@ mod tests {
                 "--no-chunks",
             ],
             vec!["ont-offload", "cleanup", "--dry-run"],
+            vec!["ont-offload", "tui"],
+            vec![
+                "ont-offload",
+                "tui",
+                "--state-dir",
+                "/var/lib/x",
+                "--log",
+                "/var/log/x.log",
+                "--theme",
+                "matrix",
+                "--refresh",
+                "2s",
+                "--bell",
+                "off",
+                "--check",
+            ],
         ] {
             assert!(Cli::try_parse_from(&args).is_ok(), "{args:?}");
         }
