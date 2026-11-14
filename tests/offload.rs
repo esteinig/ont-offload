@@ -187,7 +187,7 @@ fn missing_sentinel_exits_2_and_writes_nothing() {
     assert!(left.is_empty(), "share was written to: {left:?}");
 }
 
-/// Verifies: SRS-SEL-006, SRS-SEL-007, SRS-CFG-004
+/// Verifies: SRS-SEL-006, SRS-SEL-007, SRS-CFG-004, SRS-GRD-004
 #[test]
 fn check_config_lists_runs_and_their_destinations() {
     let Some(env) = Env::new(true) else { return };
@@ -199,6 +199,95 @@ fn check_config_lists_runs_and_their_destinations() {
             .and(predicate::str::contains("complete: final_summary"))
             .and(predicate::str::contains(
                 "destination guard OK: sentinel matches, tmpfs",
-            )),
+            ))
+            .and(predicate::str::contains("share write probe OK"))
+            .and(predicate::str::contains("mode 0640")),
     );
+    // The probe file is gone: only the sentinel and nothing else at the top.
+    let left: Vec<String> = std::fs::read_dir(env.share.path())
+        .expect("ls")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(".ont-offload-probe"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+}
+
+fn copy_tree(from: &Path, to: &Path, skip_top: &[&str]) {
+    for e in std::fs::read_dir(from).expect("ls") {
+        let e = e.expect("entry");
+        let name = e.file_name();
+        if skip_top.iter().any(|s| name == *s) {
+            continue;
+        }
+        let (src, dst) = (e.path(), to.join(&name));
+        if src.is_dir() {
+            std::fs::create_dir_all(&dst).expect("mkdir");
+            copy_tree(&src, &dst, &[]);
+        } else {
+            std::fs::copy(&src, &dst).expect("copy");
+        }
+    }
+}
+
+/// Parallel run: the legacy service's copy is checked against our
+/// manifest by `verify --against` and by the comparison script over the
+/// whole share.
+///
+/// Verifies: SRS-VER-005
+#[test]
+fn legacy_copies_are_compared_with_our_manifests() {
+    let Some(env) = Env::new(true) else { return };
+    let run = env.simulate();
+    env.cmd(&["run", run.to_str().expect("utf8")])
+        .assert()
+        .success();
+    let dest = env.dest_of(&run);
+    let rel = dest
+        .strip_prefix(env.share.path())
+        .expect("under the share");
+    let legacy_root = env.dir.path().join("legacy");
+    let legacy = legacy_root.join(rel);
+    std::fs::create_dir_all(&legacy).expect("mkdir");
+    copy_tree(&dest, &legacy, &["manifest.sha256", "run.json", "COMPLETE"]);
+
+    env.cmd(&["verify", dest.to_str().expect("utf8"), "--against"])
+        .arg(&legacy)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("OK"));
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/compare-with-legacy.sh");
+    let bin = assert_cmd::cargo::cargo_bin("ont-offload");
+    let compare = || {
+        std::process::Command::new("bash")
+            .arg(&script)
+            .arg(env.share.path())
+            .arg(&legacy_root)
+            .env("BIN", &bin)
+            .output()
+            .expect("bash runs")
+    };
+    let out = compare();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("1 match, 0 differ, 0 without"));
+
+    // The legacy copy lost a file: both report it, nothing is written.
+    let gone = std::fs::read_dir(legacy.join("pod5"))
+        .ok()
+        .and_then(|mut d| d.next())
+        .map(|e| e.expect("entry").path())
+        .expect("a pod5 file");
+    std::fs::remove_file(&gone).expect("rm");
+    env.cmd(&["verify", dest.to_str().expect("utf8"), "--against"])
+        .arg(&legacy)
+        .assert()
+        .code(4)
+        .stderr(predicate::str::contains("1 missing"));
+    let out = compare();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("DIFFERS"));
+    assert!(!dest.join("VERIFIED.json").exists());
 }

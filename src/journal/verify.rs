@@ -180,3 +180,71 @@ pub fn verify(fs: &dyn Fs, run: &Path, check_source: bool) -> Result<VerifyRepor
     );
     Ok(rep)
 }
+
+/// Compare another copy of a run (the legacy service's, during a parallel
+/// run) with this run's manifest: every manifest file is hashed in `other`
+/// and files there that the manifest does not list are reported. Reads
+/// only; nothing is written in either folder.
+///
+/// Implements: SRS-VER-005
+///
+/// # Errors
+/// [`Error::Integrity`] when `other` is missing, lacks or differs in any
+/// file, or holds files the manifest does not list; I/O errors.
+pub fn compare(fs: &dyn Fs, run: &Path, other: &Path) -> Result<VerifyReport> {
+    let shown = escape_control(&run.to_string_lossy());
+    let theirs = escape_control(&other.to_string_lossy());
+    let manifest_bytes = fs
+        .read(&run.join(MANIFEST))
+        .map_err(|e| Error::Integrity(format!("{shown}: cannot read {MANIFEST}: {e}")))?;
+    let manifest = parse_manifest(&String::from_utf8_lossy(&manifest_bytes))?;
+    fs.metadata(other)
+        .map_err(|e| Error::Integrity(format!("{theirs}: {e}")))?;
+    let mut rep = VerifyReport {
+        run: other.to_string_lossy().into_owned(),
+        files: manifest.len(),
+        manifest_sha256: sha256_hex(&manifest_bytes),
+        incomplete: fs.symlink_metadata(&run.join(COMPLETE)).is_err(),
+        ..VerifyReport::default()
+    };
+    for (rel, want) in &manifest {
+        let p = super::super::run::safe_join(other, Path::new(rel)).map_err(Error::Integrity)?;
+        match hash_file(fs, &p, 8 << 20) {
+            Ok((len, got)) => {
+                rep.bytes += len;
+                if got != *want {
+                    rep.changed.push(rel.clone());
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => rep.missing.push(rel.clone()),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    rep.extra = walk(fs, other)?
+        .into_iter()
+        .filter(|r| !manifest.contains_key(r))
+        .collect();
+    if !rep.ok() {
+        for (label, list) in [
+            ("missing there", &rep.missing),
+            ("differs there", &rep.changed),
+            ("only there", &rep.extra),
+        ] {
+            for f in list {
+                log::error!("compare {theirs}: {label}: {}", escape_control(f));
+            }
+        }
+        return Err(Error::Integrity(format!(
+            "{theirs} against the manifest of {shown}: {} missing, {} differ, {} not in the manifest{}",
+            rep.missing.len(),
+            rep.changed.len(),
+            rep.extra.len(),
+            if rep.incomplete {
+                format!("; {shown} is not complete")
+            } else {
+                String::new()
+            }
+        )));
+    }
+    Ok(rep)
+}

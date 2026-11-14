@@ -43,6 +43,12 @@ pub struct FileStat {
     pub dev: u64,
     /// Inode number (0 where the platform has none).
     pub ino: u64,
+    /// Owner user id (0 where the platform has none).
+    pub uid: u32,
+    /// Owner group id (0 where the platform has none).
+    pub gid: u32,
+    /// Permission bits (0 where the platform has none).
+    pub mode: u32,
 }
 
 impl FileStat {
@@ -58,12 +64,16 @@ impl FileStat {
             FileKind::Other
         };
         let (dev, ino) = dev_ino(m);
+        let (uid, gid, mode) = owner(m);
         Self {
             len: m.len(),
             modified: m.modified().ok(),
             kind,
             dev,
             ino,
+            uid,
+            gid,
+            mode,
         }
     }
 }
@@ -77,6 +87,17 @@ fn dev_ino(m: &fs::Metadata) -> (u64, u64) {
 #[cfg(not(unix))]
 fn dev_ino(_m: &fs::Metadata) -> (u64, u64) {
     (0, 0)
+}
+
+#[cfg(unix)]
+fn owner(m: &fs::Metadata) -> (u32, u32, u32) {
+    use std::os::unix::fs::MetadataExt;
+    (m.uid(), m.gid(), m.mode() & 0o7777)
+}
+
+#[cfg(not(unix))]
+fn owner(_m: &fs::Metadata) -> (u32, u32, u32) {
+    (0, 0, 0)
 }
 
 /// One entry of a directory listing.

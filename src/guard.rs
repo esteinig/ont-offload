@@ -228,9 +228,196 @@ impl Guard {
     }
 }
 
+/// The identity this process writes as: effective user and group id
+/// (`None` where the platform has none).
+#[must_use]
+pub fn process_ids() -> Option<(u32, u32)> {
+    #[cfg(unix)]
+    {
+        Some((
+            rustix::process::geteuid().as_raw(),
+            rustix::process::getegid().as_raw(),
+        ))
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+/// What a write probe on the share found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    /// User and group this process writes as.
+    pub process: Option<(u32, u32)>,
+    /// Owner user id of the probe file as the share reports it.
+    pub uid: u32,
+    /// Owner group id of the probe file.
+    pub gid: u32,
+    /// Permission bits of the probe file after `transfer.file_mode` was set.
+    pub mode: u32,
+    /// The mode that was asked for.
+    pub wanted_mode: u32,
+}
+
+impl Probe {
+    /// Warnings for the operator: running as root, files owned by another
+    /// user than this process (`root_squash`, `all_squash`, a fixed CIFS uid),
+    /// and a mode the share does not keep.
+    ///
+    /// Implements: SRS-GRD-004
+    #[must_use]
+    pub fn warnings(&self) -> Vec<String> {
+        let mut w = Vec::new();
+        if let Some((uid, _)) = self.process {
+            if uid == 0 {
+                w.push(
+                    "running as root: run the service as a dedicated user that owns the files \
+                     on the share (see the deployment guide)"
+                        .to_owned(),
+                );
+            }
+            if uid != self.uid {
+                w.push(format!(
+                    "files written to the share are owned by uid {} gid {}, not by this process \
+                     (uid {uid}): the server maps users (root_squash, all_squash or a fixed CIFS \
+                     uid); check that the receiving side can read them",
+                    self.uid, self.gid
+                ));
+            }
+        }
+        if self.mode != self.wanted_mode {
+            w.push(format!(
+                "the share keeps mode {:04o} instead of transfer.file_mode {:04o}; check who can \
+                 read the copies",
+                self.mode, self.wanted_mode
+            ));
+        }
+        w
+    }
+}
+
+/// Write, sync, inspect and remove a small file at the top of the share,
+/// as this process: proves the service user can write there and shows who
+/// will own the copies. Run only after [`Guard::check`] passed.
+///
+/// Implements: SRS-GRD-004
+///
+/// # Errors
+/// [`Error::Guard`] when the file cannot be written, inspected or removed.
+pub fn probe_write(dest: &Path, file_mode: u32, fs: &dyn Fs) -> Result<Probe> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_nanos());
+    let path = dest.join(format!(".ont-offload-probe-{}-{nanos}", std::process::id()));
+    let who = process_ids().map_or_else(String::new, |(u, g)| format!(" as uid {u} gid {g}"));
+    let fail = |what: &str, e: std::io::Error| {
+        Error::Guard(format!(
+            "cannot {what} {}{who}: {e}",
+            escape_control(&path.to_string_lossy())
+        ))
+    };
+    let mut f = fs.create_new(&path).map_err(|e| fail("create", e))?;
+    let written = f
+        .write_all(b"ont-offload write probe\n")
+        .and_then(|()| f.sync_data());
+    drop(f);
+    let result = written
+        .map_err(|e| fail("write", e))
+        .and_then(|()| {
+            fs.set_mode(&path, file_mode)
+                .map_err(|e| fail("set the mode of", e))
+        })
+        .and_then(|()| fs.metadata(&path).map_err(|e| fail("inspect", e)));
+    let removed = fs.remove_file(&path).map_err(|e| fail("remove", e));
+    let st = result?;
+    removed?;
+    Ok(Probe {
+        process: process_ids(),
+        uid: st.uid,
+        gid: st.gid,
+        mode: st.mode & 0o7777,
+        wanted_mode: file_mode,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fsio::RealFs;
+    use crate::fsio::faulty::{Fault, FaultyFs, Op, Rule};
+
+    /// Verifies: SRS-GRD-004
+    #[test]
+    fn write_probe_reports_owner_and_mode_and_leaves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = probe_write(dir.path(), 0o640, &RealFs).unwrap();
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "probe removed"
+        );
+        #[cfg(unix)]
+        {
+            assert_eq!(p.process.map(|(u, _)| u), Some(p.uid));
+            assert_eq!(p.mode, 0o640);
+            let root = p.uid == 0;
+            assert_eq!(p.warnings().len(), usize::from(root), "{:?}", p.warnings());
+        }
+        // A share that refuses writes is an error naming the user.
+        let fs = FaultyFs::new(std::sync::Arc::new(RealFs));
+        fs.add(Rule::always(
+            Op::CreateNew,
+            "",
+            Fault::Errno(crate::fsio::errno::EACCES),
+        ));
+        let e = probe_write(dir.path(), 0o640, &fs).unwrap_err();
+        assert!(
+            matches!(e, Error::Guard(ref m) if m.contains("cannot create")),
+            "{e}"
+        );
+        // A failed write still removes the probe.
+        let fs = FaultyFs::new(std::sync::Arc::new(RealFs));
+        fs.add(Rule::always(
+            Op::Write,
+            "",
+            Fault::Errno(crate::fsio::errno::ENOSPC),
+        ));
+        assert!(probe_write(dir.path(), 0o640, &fs).is_err());
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "probe removed after a failure"
+        );
+    }
+
+    /// Verifies: SRS-GRD-004
+    #[test]
+    fn squashed_owner_root_and_lost_mode_are_warned() {
+        let base = Probe {
+            process: Some((1001, 1001)),
+            uid: 1001,
+            gid: 1001,
+            mode: 0o640,
+            wanted_mode: 0o640,
+        };
+        assert!(base.warnings().is_empty());
+        let squashed = Probe {
+            process: Some((0, 0)),
+            uid: 65534,
+            gid: 65534,
+            ..base.clone()
+        };
+        let w = squashed.warnings();
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(w[0].contains("running as root"));
+        assert!(w[1].contains("uid 65534") && w[1].contains("root_squash"));
+        let cifs = Probe {
+            mode: 0o755,
+            ..base
+        };
+        assert!(cifs.warnings()[0].contains("mode 0755 instead of transfer.file_mode 0640"));
+    }
 
     const SAMPLE: &str = "\
 22 1 8:1 / / rw,relatime shared:1 - ext4 /dev/sda1 rw

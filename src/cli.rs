@@ -105,8 +105,12 @@ pub enum Command {
         /// Run folder on the destination.
         run: PathBuf,
         /// Also re-hash the source run recorded in run.json.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "against")]
         source: bool,
+        /// Instead, check another copy of the run (for example the legacy
+        /// service's) against this run's manifest; writes nothing.
+        #[arg(long, value_name = "FOLDER")]
+        against: Option<PathBuf>,
     },
     /// Print the live-state snapshot.
     Status {
@@ -231,6 +235,13 @@ mod tests {
             vec!["ont-offload", "watch", "--until-idle"],
             vec!["ont-offload", "run", "/data/x", "--completed"],
             vec!["ont-offload", "verify", "/mnt/x", "--source"],
+            vec![
+                "ont-offload",
+                "verify",
+                "/mnt/x",
+                "--against",
+                "/mnt/legacy/x",
+            ],
             vec!["ont-offload", "status", "--json"],
             vec!["ont-offload", "check-config"],
             vec!["ont-offload", "bench"],

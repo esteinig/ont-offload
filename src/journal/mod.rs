@@ -21,7 +21,7 @@ use crate::error::{Error, Result};
 use crate::fsio::Fs;
 use crate::logging::escape_control;
 
-pub use verify::{VerifyReport, verify};
+pub use verify::{VerifyReport, compare, verify};
 
 /// Name of the manifest in a destination run folder.
 pub const MANIFEST: &str = "manifest.sha256";
