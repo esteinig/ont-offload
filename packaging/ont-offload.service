@@ -19,8 +19,28 @@ RestartPreventExitStatus=2
 WatchdogSec=120
 # Stopping at any moment is safe: the journal is always consistent.
 TimeoutStopSec=60
+
+# A dedicated user (packaging/ont-offload.sysusers) that the share lets
+# write, and that can read the run folders (add it to the group that owns
+# them; with cleanup on, that group also needs write access). Never root:
+# with root_squash, root's files arrive on the share as nobody.
+User=ont-offload
+Group=ont-offload
+# State and logs are readable by the group (operators running `status` or
+# `tui` are added to it) and by no one else.
 StateDirectory=ont-offload
+StateDirectoryMode=0750
 LogsDirectory=ont-offload
+LogsDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictSUIDSGID=yes
+
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6

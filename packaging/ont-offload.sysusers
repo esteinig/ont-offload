@@ -1,0 +1,5 @@
+# systemd-sysusers: the user and group the ont-offload service runs as.
+# Install as /usr/lib/sysusers.d/ont-offload.conf and run
+# `systemd-sysusers`, or create them by hand:
+#   useradd --system --user-group --home-dir /var/lib/ont-offload --shell /usr/sbin/nologin ont-offload
+u ont-offload - "ont-offload offload service" /var/lib/ont-offload /usr/sbin/nologin
