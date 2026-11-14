@@ -260,6 +260,11 @@ impl Fs for FaultyFs {
         }))
     }
 
+    fn read_at(&self, path: &Path, offset: u64, max: usize) -> io::Result<Vec<u8>> {
+        self.check(Op::OpenRead, path)?;
+        self.inner.read_at(path, offset, max)
+    }
+
     fn create_new(&self, path: &Path) -> io::Result<Box<dyn FsFile>> {
         self.check(Op::CreateNew, path)?;
         Ok(Box::new(FaultyFile {

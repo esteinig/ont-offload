@@ -151,6 +151,20 @@ pub trait Fs: Send + Sync {
     /// Returns the operating system error.
     fn open_read(&self, path: &Path) -> io::Result<Box<dyn Read + Send>>;
 
+    /// Read at most `max` bytes starting at `offset` (fewer at the end of
+    /// the file). Used to tail append-only files without reading them
+    /// whole.
+    ///
+    /// # Errors
+    /// Returns the operating system error.
+    fn read_at(&self, path: &Path, offset: u64, max: usize) -> io::Result<Vec<u8>> {
+        let mut r = self.open_read(path)?;
+        io::copy(&mut r.by_ref().take(offset), &mut io::sink())?;
+        let mut out = Vec::new();
+        r.take(max as u64).read_to_end(&mut out)?;
+        Ok(out)
+    }
+
     /// Create a new file for writing; fails if it exists.
     ///
     /// # Errors
@@ -241,6 +255,15 @@ impl Fs for RealFs {
 
     fn open_read(&self, path: &Path) -> io::Result<Box<dyn Read + Send>> {
         Ok(Box::new(fs::File::open(path)?))
+    }
+
+    fn read_at(&self, path: &Path, offset: u64, max: usize) -> io::Result<Vec<u8>> {
+        use std::io::{Seek, SeekFrom};
+        let mut f = fs::File::open(path)?;
+        f.seek(SeekFrom::Start(offset))?;
+        let mut out = Vec::new();
+        f.take(max as u64).read_to_end(&mut out)?;
+        Ok(out)
     }
 
     fn create_new(&self, path: &Path) -> io::Result<Box<dyn FsFile>> {
