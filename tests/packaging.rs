@@ -95,3 +95,20 @@ fn shell_scripts_parse() {
         );
     }
 }
+
+/// The drop-in for an existing account (such as `prom`) sets a user and
+/// group and never root.
+///
+/// Verifies: SRS-DEP-001
+#[test]
+fn existing_user_drop_in_is_not_root() {
+    let d = directives(&read("packaging/run-as-existing-user.conf"));
+    let user = d.iter().find(|(k, _)| k == "User").map(|(_, v)| v.as_str());
+    let group = d
+        .iter()
+        .find(|(k, _)| k == "Group")
+        .map(|(_, v)| v.as_str());
+    assert_eq!(user, Some("prom"));
+    assert_eq!(group, Some("prom"));
+    assert!(d.iter().all(|(_, v)| v != "root" && v != "0"));
+}

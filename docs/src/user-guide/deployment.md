@@ -42,6 +42,25 @@ sudo usermod -aG <group of the run folders> ont-offload
   - SMB: mount with `uid=ont-offload,gid=ont-offload,file_mode=0640,dir_mode=0750` (or the modes the receiving side needs). The server owns the files; `check-config` shows what it reports.
 - **Operators.** People who run `ont-offload status` or `ont-offload tui` need read access to the state and log folders, which the unit makes `0750` for the group: `sudo usermod -aG ont-offload <operator>`.
 
+### Running as an existing user (for example `prom`)
+
+The service can run as any user that is not root, such as the standard `prom` account on a PromethION. Nothing in ont-offload depends on the name `ont-offload`. Use the drop-in in `packaging/run-as-existing-user.conf` instead of creating a user:
+
+```sh
+sudo install -D -m 0644 packaging/run-as-existing-user.conf /etc/systemd/system/ont-offload.service.d/user.conf
+sudoedit /etc/logrotate.d/ont-offload        # "create 0640 prom prom" and "su prom prom"
+sudo chgrp prom /etc/ont-offload/config.toml
+sudo systemctl daemon-reload
+sudo -u prom ont-offload check-config
+```
+
+What changes:
+
+- Copies on the share are owned by `prom`'s uid (or what the share maps it to): `check-config` shows it. The share and the receiving side must accept that user, as in the bullets above.
+- `prom` must read the run folders (and write them, with cleanup on), as above.
+- State and logs are readable by the `prom` group. Operators who log in as `prom` see them without further setup; others need to join that group.
+- The trade-off: `prom` is a login account, so anyone logged in as `prom` can change or remove the offload state and journals, and files written in a `prom` session are indistinguishable from the service's on the share. A dedicated user keeps the two apart. Both are supported; the share's owner and audit needs decide.
+
 ## 4. Configuration, logs and the service
 
 ```sh
