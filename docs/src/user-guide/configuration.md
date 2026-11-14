@@ -13,7 +13,7 @@ The configuration is TOML; unknown keys are rejected. A complete example with ev
 | `[cleanup]` | `delete` (`off`, `dry-run`, `on`; default `off`), `gate` (`storage-verify`, `readback`, `both`), `delete_after` (default `"7d"`), `rehash_source` (default `true`), `only_when_free_below` (default `"always"`). See [Deleting offloaded runs](cleanup.md) |
 | `[guard]` | `allowed_fstypes` (default `nfs`, `nfs4`, `cifs`, `smb3`) |
 | `[state]` | `interval` (default `"2s"`: how often `state.json` is rewritten, at least 1 s), `events_max_size` (default `"64MB"`: `events.jsonl` is rotated at this size, at least 1 MiB). See [Live state and status](watch.md#live-state-and-status) |
-| `[logging]` | log file and format |
+| `[logging]` | `file` (the daemon reopens it by name after logrotate renames it; see `packaging/ont-offload.logrotate`) and `format` |
 | `[tui]` | the dashboard: `theme` (`plain`, `matrix`, `phosphor`, `synthwave`; default `plain`), `refresh` (200ms to 60s; default `"1s"`), `bell` (default `true`). Flags and `ONT_OFFLOAD_TUI_*` variables override them; see [Monitoring dashboard](tui.md#settings-and-where-they-come-from) |
 
 Sizes and rates need explicit units: `KB`, `MB`, `GB`, `TB` (powers of 1000), `KiB`, `MiB`, `GiB`, `TiB` (powers of 1024), rates as `"100MB/s"`, `"800Mbit/s"`, `"1Gbit/s"` (also `Mbps`, `Gbps`) or `"unlimited"`. Durations are written as `"30s"`, `"5m"`, `"1h"`, `"7d"`.
