@@ -12,7 +12,7 @@
 | `ont-offload cleanup [--dry-run] [<run>]` | Gated deletion of offloaded source runs; see [Deleting offloaded runs](cleanup.md) | v0.5 |
 | `ont-offload tui [--state-dir] [--log] [--theme] [--refresh] [--bell on\|off] [--check]` | Read-only terminal dashboard of the daemon (build feature `tui`, included in releases); settings also from `ONT_OFFLOAD_*` variables; see [Monitoring dashboard](tui.md) | v0.6 |
 
-Global options: `--config`, `--log-level`, `--log-file`, `--log-format text|json`.
+Global options: `--config`, `--log-level`, `--log-file`, `--log-format text|json`. `watch` takes its log file and format from `[logging]` in the config when these flags are not given; every other command logs to the console only unless you pass them.
 
 ## Exit codes
 

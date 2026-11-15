@@ -52,6 +52,23 @@ pub fn init(level: log::LevelFilter, file: Option<&Path>, format: LogFormat) -> 
     root.apply().map_err(|_| Error::LoggerInstalled)
 }
 
+/// The log file and format: a flag wins, then the configuration's
+/// `[logging]` (read for the daemon only), then no file and text lines.
+///
+/// Implements: SRS-LOG-002
+#[must_use]
+pub fn choose(
+    flag_file: Option<&Path>,
+    flag_format: Option<LogFormat>,
+    config: Option<(Option<PathBuf>, LogFormat)>,
+) -> (Option<PathBuf>, LogFormat) {
+    let (cfg_file, cfg_format) = config.map_or((None, None), |(f, fmt)| (f, Some(fmt)));
+    (
+        flag_file.map(Path::to_path_buf).or(cfg_file),
+        flag_format.or(cfg_format).unwrap_or(LogFormat::Text),
+    )
+}
+
 /// How often the log file's name is checked for a rotation.
 pub const REOPEN_CHECK: Duration = Duration::from_secs(1);
 
@@ -235,6 +252,25 @@ mod tests {
             std::fs::read_to_string(dir.path().join("old.log"))
                 .unwrap()
                 .ends_with("four\n")
+        );
+    }
+
+    /// Verifies: SRS-LOG-002
+    #[test]
+    fn flags_win_over_the_configured_log_file_and_format() {
+        let cfg = Some((Some(PathBuf::from("/var/log/x.log")), LogFormat::Json));
+        assert_eq!(
+            choose(None, None, cfg.clone()),
+            (Some(PathBuf::from("/var/log/x.log")), LogFormat::Json)
+        );
+        assert_eq!(
+            choose(Some(Path::new("/tmp/y.log")), Some(LogFormat::Text), cfg),
+            (Some(PathBuf::from("/tmp/y.log")), LogFormat::Text)
+        );
+        assert_eq!(choose(None, None, None), (None, LogFormat::Text));
+        assert_eq!(
+            choose(None, None, Some((None, LogFormat::Json))),
+            (None, LogFormat::Json)
         );
     }
 

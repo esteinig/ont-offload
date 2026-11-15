@@ -37,13 +37,14 @@ pub struct GlobalArgs {
     #[arg(long, global = true, value_enum, default_value_t = LogLevel::Info, env = "ONT_OFFLOAD_LOG")]
     pub log_level: LogLevel,
 
-    /// Also write logs to this file.
+    /// Also write logs to this file (`watch` defaults to `logging.file`
+    /// of the configuration).
     #[arg(long, global = true)]
     pub log_file: Option<PathBuf>,
 
-    /// Log line format.
-    #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
-    pub log_format: LogFormat,
+    /// Log line format [default: text, or `logging.format` for `watch`].
+    #[arg(long, global = true, value_enum)]
+    pub log_format: Option<LogFormat>,
 }
 
 /// Log levels accepted on the command line.
@@ -178,6 +179,15 @@ pub enum Switch {
 }
 
 impl Command {
+    /// The command is the daemon, which writes the log file named in the
+    /// configuration (`logging.file`); other commands, often run by an
+    /// operator without write access to it, log to the console only unless
+    /// given `--log-file`.
+    #[must_use]
+    pub fn uses_config_log(&self) -> bool {
+        matches!(self, Self::Watch { .. })
+    }
+
     /// The command takes over the terminal (console logging would draw
     /// over it).
     #[must_use]

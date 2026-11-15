@@ -7,7 +7,7 @@ use clap::Parser;
 use ont_offload::cli::Cli;
 use ont_offload::error::exit;
 
-/// Implements: SRS-CLI-003, SRS-CLI-004
+/// Implements: SRS-CLI-003, SRS-CLI-004, SRS-LOG-002
 fn main() -> ExitCode {
     let cli = Cli::parse(); // usage errors exit with code 2 (clap)
 
@@ -18,9 +18,17 @@ fn main() -> ExitCode {
     } else {
         level
     };
-    if let Err(e) =
-        ont_offload::logging::init(level, cli.global.log_file.as_deref(), cli.global.log_format)
-    {
+    let from_config = if cli.command.uses_config_log() {
+        ont_offload::config::logging_settings(&cli.global.config)
+    } else {
+        None
+    };
+    let (log_file, log_format) = ont_offload::logging::choose(
+        cli.global.log_file.as_deref(),
+        cli.global.log_format,
+        from_config,
+    );
+    if let Err(e) = ont_offload::logging::init(level, log_file.as_deref(), log_format) {
         eprintln!("ont-offload: {e}");
         return ExitCode::from(e.exit_code());
     }
