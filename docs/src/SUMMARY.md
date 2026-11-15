@@ -10,6 +10,7 @@
 - [Usage](user-guide/usage.md)
 - [Offloading a run](user-guide/offload.md)
 - [Running the daemon](user-guide/watch.md)
+- [Several sources and user transfer folders](user-guide/transfer-folders.md)
 - [Deleting offloaded runs](user-guide/cleanup.md)
 - [Monitoring dashboard](user-guide/tui.md)
 - [Known limitations](user-guide/limitations.md)
