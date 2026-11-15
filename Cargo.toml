@@ -75,7 +75,7 @@ thiserror = "2"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 # Dashboard only (feature `tui`).
 ratatui = { version = "0.29", optional = true, default-features = false, features = ["crossterm"] }
-crossterm = { version = "0.28", optional = true }
+crossterm = { version = "0.29", optional = true }
 
 # Free space (statvfs) on the source and the share; already used by ont-runsim.
 [target.'cfg(unix)'.dependencies]
