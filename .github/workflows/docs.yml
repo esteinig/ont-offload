@@ -46,4 +46,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4 # pin to a commit SHA
+        uses: actions/deploy-pages@v5 # pin to a commit SHA
