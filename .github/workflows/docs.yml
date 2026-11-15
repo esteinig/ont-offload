@@ -34,7 +34,7 @@ jobs:
       - name: Lifecycle documents
         run: medtrace doc build all --out docs/src/lifecycle
       - run: mdbook build docs
-      - uses: actions/upload-pages-artifact@v3 # pin to a commit SHA
+      - uses: actions/upload-pages-artifact@v5 # pin to a commit SHA
         with:
           path: docs/book
 
