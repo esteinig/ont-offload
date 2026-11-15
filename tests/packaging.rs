@@ -80,6 +80,7 @@ fn shell_scripts_parse() {
         ("bash", "scripts/compare-with-legacy.sh"),
         ("bash", "scripts/replay-soak.sh"),
         ("bash", "scripts/real-share-test.sh"),
+        ("bash", "scripts/local-test.sh"),
     ] {
         let Ok(out) = std::process::Command::new(shell)
             .arg("-n")

@@ -7,6 +7,7 @@
 | Fault injection | `FaultyFs`: EIO/ESTALE bursts, ENOSPC, short writes, blocking writes, bit flips, vanishing sentinel, repointed `dest_root`, source appended mid-copy, failed rename; v0.2 covers these in `src/run/tests.rs` | every PR |
 | Simulator | `ont-runsim` on a fake clock: MinKNOW-shaped runs, faults on, destination compared with the simulator manifest | every PR |
 | Real shares | NFS and Samba on the CI runner, server stopped mid-run (`scripts/real-share-test.sh`) | nightly |
+| Laptop bench | a tmpfs folder as the share, simulated runs, outage by moving the sentinel (`scripts/local-test.sh`, [Testing on a laptop](../user-guide/local-testing.md)) | by hand |
 | Soak and qualification | Fake-clock soaks in CI (24 h replay; 72 h with 200 runs, hourly storage-side verification and cleanup, memory bounds); 24 to 72 h runs on staging shares, independent `sha256sum -c`; two weeks of dry-run cleanup reports reviewed on site | before each release |
 
 Every test carries `/// Verifies: SRS-...`; `cargo xtask trace --strict` fails when a requirement has no passing test.

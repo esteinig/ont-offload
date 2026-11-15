@@ -6,6 +6,7 @@
 
 - [Installation](user-guide/installation.md)
 - [Deploying on a sequencer](user-guide/deployment.md)
+- [Testing on a laptop](user-guide/local-testing.md)
 - [Usage](user-guide/usage.md)
 - [Offloading a run](user-guide/offload.md)
 - [Running the daemon](user-guide/watch.md)
