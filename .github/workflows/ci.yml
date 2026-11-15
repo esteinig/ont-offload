@@ -148,7 +148,7 @@ jobs:
           else
             [[ "$HEAD" =~ ^(feat|fix|docs|compliance|chore|ci|test|refactor|perf|build)/[a-z0-9._-]+$ ]] || [[ "$HEAD" =~ ^release/ ]] || { echo "Branch '$HEAD' must be <type>/<topic>"; exit 1; }
           fi
-      - uses: cocogitto/cocogitto-action@v3 # pin to a commit SHA
+      - uses: cocogitto/cocogitto-action@v4 # pin to a commit SHA
         with:
           check: false
       - name: PR title is a Conventional Commit

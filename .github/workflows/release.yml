@@ -50,7 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"
-      - uses: cocogitto/cocogitto-action@v3 # pin to a commit SHA
+      - uses: cocogitto/cocogitto-action@v4 # pin to a commit SHA
         with:
           check: false
       - uses: ./.github/actions/setup-medtrace
