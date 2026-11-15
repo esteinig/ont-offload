@@ -43,9 +43,9 @@ pub struct RawConfig {
     /// Journal and state directory.
     #[serde(default = "d_state_dir")]
     pub state_dir: String,
-    /// `[source]`
-    #[serde(default)]
-    pub source: RawSource,
+    /// `[source]` (one source) or `[[source]]` (several).
+    #[serde(default = "d_sources", deserialize_with = "one_or_many")]
+    pub source: Vec<RawSource>,
     /// `[selection]`
     #[serde(default)]
     pub selection: RawSelection,
@@ -288,36 +288,119 @@ pub enum Layout {
     Minknow,
     /// Any folder below the root that contains a run marker.
     AnyDepth,
+    /// Datasets dropped by users: a folder below the root that holds a
+    /// `READY` file is one dataset with all its subfolders, complete as soon
+    /// as the marker is there.
+    Ready,
 }
 
-/// `[source]` as written.
+impl Layout {
+    /// Setting value as written in the configuration.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Minknow => "minknow",
+            Self::AnyDepth => "any-depth",
+            Self::Ready => "ready",
+        }
+    }
+}
+
+/// Default marker of the `ready` layout.
+pub const READY_MARKER: &str = "READY";
+
+/// `[source]` or one `[[source]]` entry as written.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct RawSource {
+    /// Short name shown with each run (default: the root's folder name).
+    pub name: Option<String>,
     /// Base directory that holds experiment folders.
     pub root: String,
     /// Folder layout below the root.
     pub layout: Layout,
-    /// File name patterns that mark a folder as a run.
-    pub run_markers: Vec<String>,
-    /// File name patterns that mark a run as complete.
-    pub complete_markers: Vec<String>,
+    /// File name patterns that mark a folder as a run (default by layout).
+    pub run_markers: Option<Vec<String>>,
+    /// File name patterns that mark a run as complete (default by layout).
+    pub complete_markers: Option<Vec<String>>,
     /// Patterns (relative to the root) never treated as runs.
     pub ignore: Vec<String>,
     /// Full rescan interval; between full rescans only changed folders are listed.
     pub full_rescan_every: String,
+    /// Folder below `dest_root` for this source's runs (default: `dest_root` itself).
+    pub dest: String,
+    /// Which level becomes the top folder (default: the top-level `dest_starts_at`).
+    pub dest_starts_at: Option<DestLevel>,
+    /// Whether `[cleanup]` may delete runs of this source (default: not for `ready`).
+    pub cleanup: Option<bool>,
 }
 
 impl Default for RawSource {
     fn default() -> Self {
         Self {
+            name: None,
             root: "/data".into(),
             layout: Layout::Minknow,
-            run_markers: strings(&["sample_sheet_*.csv"]),
-            complete_markers: strings(&["final_summary_*.txt"]),
+            run_markers: None,
+            complete_markers: None,
             ignore: strings(&["lost+found", "**/.*", "ont-runsim"]),
             full_rescan_every: "10m".into(),
+            dest: String::new(),
+            dest_starts_at: None,
+            cleanup: None,
         }
+    }
+}
+
+impl RawSource {
+    /// Run markers as configured, or the layout's default.
+    #[must_use]
+    pub fn run_markers(&self) -> Vec<String> {
+        self.run_markers
+            .clone()
+            .unwrap_or_else(|| match self.layout {
+                Layout::Ready => strings(&[READY_MARKER]),
+                _ => strings(&["sample_sheet_*.csv"]),
+            })
+    }
+
+    /// Complete markers as configured, or the layout's default (for
+    /// `ready`: the run markers, so a dataset is complete once marked).
+    #[must_use]
+    pub fn complete_markers(&self) -> Vec<String> {
+        self.complete_markers
+            .clone()
+            .unwrap_or_else(|| match self.layout {
+                Layout::Ready => self.run_markers(),
+                _ => strings(&["final_summary_*.txt"]),
+            })
+    }
+}
+
+fn d_sources() -> Vec<RawSource> {
+    vec![RawSource::default()]
+}
+
+/// `[source]` is one source, `[[source]]` a list of them.
+fn one_or_many<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Vec<RawSource>, D::Error> {
+    use serde::de::Error as _;
+    match toml::Value::deserialize(d)? {
+        toml::Value::Array(items) => items
+            .into_iter()
+            .enumerate()
+            .map(|(i, v)| {
+                RawSource::deserialize(v)
+                    .map_err(|e| D::Error::custom(format!("source[{}]: {}", i + 1, e.message())))
+            })
+            .collect(),
+        v @ toml::Value::Table(_) => RawSource::deserialize(v)
+            .map(|s| vec![s])
+            .map_err(|e| D::Error::custom(format!("source: {}", e.message()))),
+        _ => Err(D::Error::custom(
+            "source must be a table [source] or a list of tables [[source]]",
+        )),
     }
 }
 
@@ -576,9 +659,11 @@ pub struct CheckedPath {
     pub dev: u64,
 }
 
-/// `[source]`, validated.
+/// One source, validated.
 #[derive(Debug, Clone)]
 pub struct Source {
+    /// Name shown with its runs.
+    pub name: String,
     /// Base directory.
     pub root: CheckedPath,
     /// Folder layout.
@@ -591,6 +676,29 @@ pub struct Source {
     pub ignore: Vec<String>,
     /// Full rescan interval.
     pub full_rescan_every: Duration,
+    /// Folder below `dest_root` for its runs (empty: `dest_root` itself).
+    pub dest: PathBuf,
+    /// Top destination level.
+    pub dest_starts_at: DestLevel,
+    /// Whether cleanup may delete its runs.
+    pub cleanup: bool,
+    /// Roots of other sources inside this one (resolved); never scanned here.
+    pub skip: Vec<PathBuf>,
+}
+
+impl Source {
+    /// Patterns that make a folder inside a run a run of its own (not
+    /// copied with it). None for `ready`: everything below a marked folder
+    /// belongs to the dataset.
+    ///
+    /// Implements: SRS-SRC-002
+    #[must_use]
+    pub fn nested_markers(&self) -> &[String] {
+        match self.layout {
+            Layout::Ready => &[],
+            _ => &self.run_markers,
+        }
+    }
 }
 
 /// `[state]`, validated.
@@ -694,12 +802,10 @@ pub struct Config {
     pub dest_root: CheckedPath,
     /// Destination target id.
     pub target_id: String,
-    /// Top destination level.
-    pub dest_starts_at: DestLevel,
     /// State directory.
     pub state_dir: CheckedPath,
-    /// Source settings.
-    pub source: Source,
+    /// Sources, in configuration order (at least one).
+    pub sources: Vec<Source>,
     /// Selection settings.
     pub selection: Selection,
     /// Bandwidth settings.
@@ -922,6 +1028,234 @@ fn contains(outer: &Path, inner: &Path) -> bool {
     inner.starts_with(outer)
 }
 
+/// Key of a source setting in messages: `source.root` for a single
+/// `[source]`, `source[2].root` for the second `[[source]]`.
+fn source_key(n: usize, i: usize, k: &str) -> String {
+    if n == 1 {
+        format!("source.{k}")
+    } else {
+        format!("source[{}].{k}", i + 1)
+    }
+}
+
+/// Check a `dest` subfolder: empty, or plain folder names only.
+fn dest_folder(c: &mut Check, key: &str, v: &str) -> PathBuf {
+    let p = PathBuf::from(v);
+    if v.is_empty() {
+        return p;
+    }
+    if v.chars().any(char::is_control) || v.trim() != v {
+        c.problem(
+            key,
+            format!(
+                "{:?} contains control characters or surrounding whitespace",
+                escape_control(v)
+            ),
+        );
+    } else if !p.components().all(|x| matches!(x, Component::Normal(_))) {
+        c.problem(
+            key,
+            format!(
+                "{:?} must be a relative folder below dest_root (plain names, no \"..\")",
+                escape_control(v)
+            ),
+        );
+    }
+    p
+}
+
+/// Validate every source: paths, names, markers, destination folders and
+/// how the sources relate to each other and to `dest_root` and `state_dir`.
+///
+/// Implements: SRS-SRC-001, SRS-SRC-003, SRS-SRC-004
+#[allow(clippy::too_many_lines)]
+fn validate_sources(
+    c: &mut Check,
+    raw: &RawConfig,
+    fs: &dyn Fs,
+    dest: Option<&CheckedPath>,
+    state: Option<&CheckedPath>,
+) -> Vec<Source> {
+    let n = raw.source.len();
+    if n == 0 {
+        c.problem("source", "needs at least one [[source]]");
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for (i, rs) in raw.source.iter().enumerate() {
+        let key = |k: &str| source_key(n, i, k);
+        let root = c.dir(&key("root"), &rs.root, fs);
+        if let (Some(d), Some(s)) = (dest, &root) {
+            if contains(&d.resolved, &s.resolved) || contains(&s.resolved, &d.resolved) {
+                c.problem(
+                    "dest_root",
+                    format!(
+                        "{} and {} {} contain each other (after resolving symlinks)",
+                        d.resolved.display(),
+                        key("root"),
+                        s.resolved.display()
+                    ),
+                );
+            } else if d.dev == s.dev {
+                c.problem(
+                    "dest_root",
+                    format!(
+                        "{} is on the same device as {} {}; is the network share mounted?",
+                        d.resolved.display(),
+                        key("root"),
+                        s.resolved.display()
+                    ),
+                );
+            }
+        }
+        if let (Some(st), Some(o)) = (state, &root) {
+            if contains(&o.resolved, &st.resolved) || contains(&st.resolved, &o.resolved) {
+                c.problem(
+                    "state_dir",
+                    format!(
+                        "{} must be outside {} {}",
+                        st.resolved.display(),
+                        key("root"),
+                        o.resolved.display()
+                    ),
+                );
+            }
+        }
+        let run_markers = rs.run_markers();
+        let complete_markers = rs.complete_markers();
+        c.globs(&key("run_markers"), &run_markers, true);
+        c.globs(&key("complete_markers"), &complete_markers, true);
+        c.globs(&key("ignore"), &rs.ignore, false);
+        if run_markers.is_empty() {
+            c.problem(&key("run_markers"), "needs at least one pattern");
+        }
+        if complete_markers.is_empty() {
+            c.problem(&key("complete_markers"), "needs at least one pattern");
+        }
+        let full_rescan_every = c.duration(&key("full_rescan_every"), &rs.full_rescan_every);
+        if full_rescan_every < Duration::from_secs(10)
+            && !c
+                .problems
+                .iter()
+                .any(|p| p.starts_with(&key("full_rescan_every")))
+        {
+            c.problem(&key("full_rescan_every"), "must be at least 10s");
+        }
+        let name = rs.name.clone().unwrap_or_else(|| {
+            Path::new(&rs.root).file_name().map_or_else(
+                || format!("source{}", i + 1),
+                |f| f.to_string_lossy().into_owned(),
+            )
+        });
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        {
+            c.problem(
+                &key("name"),
+                format!(
+                    "{:?} may only contain letters, digits, '-', '_' and '.'",
+                    escape_control(&name)
+                ),
+            );
+        }
+        let dest_sub = dest_folder(c, &key("dest"), &rs.dest);
+        let cleanup = rs.cleanup.unwrap_or(rs.layout != Layout::Ready);
+        if cleanup && rs.layout == Layout::Ready && rs.cleanup == Some(true) {
+            c.warn(
+                &key("cleanup"),
+                "is on for a ready source: datasets that users dropped are deleted from the source once offloaded",
+            );
+        }
+        if let Some(root) = root {
+            out.push(Source {
+                name,
+                root,
+                layout: rs.layout,
+                run_markers,
+                complete_markers,
+                ignore: rs.ignore.clone(),
+                full_rescan_every,
+                dest: dest_sub,
+                dest_starts_at: rs.dest_starts_at.unwrap_or(raw.dest_starts_at),
+                cleanup,
+                skip: Vec::new(),
+            });
+        }
+    }
+    if out.len() != n {
+        return out;
+    }
+    // How the sources relate to each other (SRS-SRC-003).
+    for i in 0..n {
+        for j in 0..n {
+            if i == j {
+                continue;
+            }
+            let (a, b) = (&out[i], &out[j]);
+            if j > i && a.name == b.name {
+                c.problem(
+                    &source_key(n, j, "name"),
+                    format!(
+                        "{:?} is already the name of source {}",
+                        escape_control(&b.name),
+                        i + 1
+                    ),
+                );
+            }
+            if j > i && a.root.resolved == b.root.resolved {
+                c.problem(
+                    &source_key(n, j, "root"),
+                    format!(
+                        "{} is already the root of source {}",
+                        b.root.resolved.display(),
+                        i + 1
+                    ),
+                );
+            } else if b.root.resolved.starts_with(&a.root.resolved) {
+                c.warn(
+                    &source_key(n, i, "root"),
+                    format!(
+                        "contains the root of source {} ({}); that folder is left to source {}",
+                        b.name,
+                        b.root.resolved.display(),
+                        b.name
+                    ),
+                );
+            }
+            if j > i {
+                let (da, db) = (&a.dest, &b.dest);
+                let empty = da.as_os_str().is_empty() && db.as_os_str().is_empty();
+                if empty
+                    || (!da.as_os_str().is_empty()
+                        && !db.as_os_str().is_empty()
+                        && (da.starts_with(db) || db.starts_with(da)))
+                {
+                    c.problem(
+                        &source_key(n, j, "dest"),
+                        format!(
+                            "{:?} overlaps the destination folder {:?} of source {}; give each source its own folder below dest_root",
+                            escape_control(&db.to_string_lossy()),
+                            escape_control(&da.to_string_lossy()),
+                            a.name
+                        ),
+                    );
+                }
+            }
+        }
+    }
+    let roots: Vec<PathBuf> = out.iter().map(|s| s.root.resolved.clone()).collect();
+    for s in &mut out {
+        s.skip = roots
+            .iter()
+            .filter(|r| **r != s.root.resolved && r.starts_with(&s.root.resolved))
+            .cloned()
+            .collect();
+    }
+    out
+}
+
 /// Validate a parsed configuration against the filesystem.
 ///
 /// Implements: SRS-CFG-001, SRS-CFG-002, SRS-CFG-003, SRS-RATE-002
@@ -934,7 +1268,6 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
 
     // Paths (SRS-CFG-001).
     let dest = c.dir("dest_root", &raw.dest_root, fs);
-    let src = c.dir("source.root", &raw.source.root, fs);
     let state = c.dir("state_dir", &raw.state_dir, fs);
     let log_file = raw.logging.file.as_deref().and_then(|f| {
         if !c.path_text("logging.file", f) {
@@ -954,43 +1287,19 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     });
 
     // Containment and device (SRS-CFG-002).
-    if let (Some(d), Some(s)) = (&dest, &src) {
-        if contains(&d.resolved, &s.resolved) || contains(&s.resolved, &d.resolved) {
+    if let (Some(st), Some(o)) = (&state, &dest) {
+        if contains(&o.resolved, &st.resolved) || contains(&st.resolved, &o.resolved) {
             c.problem(
-                "dest_root",
+                "state_dir",
                 format!(
-                    "{} and source.root {} contain each other (after resolving symlinks)",
-                    d.resolved.display(),
-                    s.resolved.display()
-                ),
-            );
-        } else if d.dev == s.dev {
-            c.problem(
-                "dest_root",
-                format!(
-                    "{} is on the same device as source.root {}; is the network share mounted?",
-                    d.resolved.display(),
-                    s.resolved.display()
+                    "{} must be outside dest_root {}",
+                    st.resolved.display(),
+                    o.resolved.display()
                 ),
             );
         }
     }
-    if let Some(st) = &state {
-        for (key, other) in [("dest_root", &dest), ("source.root", &src)] {
-            if let Some(o) = other {
-                if contains(&o.resolved, &st.resolved) || contains(&st.resolved, &o.resolved) {
-                    c.problem(
-                        "state_dir",
-                        format!(
-                            "{} must be outside {key} {}",
-                            st.resolved.display(),
-                            o.resolved.display()
-                        ),
-                    );
-                }
-            }
-        }
-    }
+    let sources = validate_sources(&mut c, raw, fs, dest.as_ref(), state.as_ref());
 
     // Target id.
     let id = raw.target_id.as_str();
@@ -1013,13 +1322,6 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     }
 
     // Patterns.
-    c.globs("source.run_markers", &raw.source.run_markers, true);
-    c.globs(
-        "source.complete_markers",
-        &raw.source.complete_markers,
-        true,
-    );
-    c.globs("source.ignore", &raw.source.ignore, false);
     c.globs("selection.include", &raw.selection.include, false);
     c.globs("selection.exclude", &raw.selection.exclude, false);
     c.globs(
@@ -1027,12 +1329,6 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
         &raw.selection.defer_until_complete,
         false,
     );
-    if raw.source.run_markers.is_empty() {
-        c.problem("source.run_markers", "needs at least one pattern");
-    }
-    if raw.source.complete_markers.is_empty() {
-        c.problem("source.complete_markers", "needs at least one pattern");
-    }
     if raw.selection.include.is_empty() {
         c.problem(
             "selection.include",
@@ -1113,15 +1409,6 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     }
     let min_free = c.size("transfer.min_free", &t.min_free);
     let watch_completed_for = c.duration("transfer.watch_completed_for", &t.watch_completed_for);
-    let full_rescan_every = c.duration("source.full_rescan_every", &raw.source.full_rescan_every);
-    if full_rescan_every < Duration::from_secs(10)
-        && !c
-            .problems
-            .iter()
-            .any(|p| p.starts_with("source.full_rescan_every"))
-    {
-        c.problem("source.full_rescan_every", "must be at least 10s");
-    }
     let state_interval = c.duration("state.interval", &raw.state.interval);
     if state_interval < Duration::from_secs(1)
         && !c.problems.iter().any(|p| p.starts_with("state.interval"))
@@ -1265,25 +1552,18 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     if !c.problems.is_empty() {
         return Err(c.problems);
     }
-    let (Some(dest_root), Some(root), Some(state_dir), Some(rate_limit)) =
-        (dest, src, state, rate_limit)
-    else {
+    let (Some(dest_root), Some(state_dir), Some(rate_limit)) = (dest, state, rate_limit) else {
         return Err(vec!["internal: validation incomplete".into()]);
     };
+    if sources.len() != raw.source.len() {
+        return Err(vec!["internal: validation incomplete".into()]);
+    }
     Ok(Loaded {
         config: Config {
             dest_root,
             target_id: raw.target_id.clone(),
-            dest_starts_at: raw.dest_starts_at,
             state_dir,
-            source: Source {
-                root,
-                layout: raw.source.layout,
-                run_markers: raw.source.run_markers.clone(),
-                complete_markers: raw.source.complete_markers.clone(),
-                ignore: raw.source.ignore.clone(),
-                full_rescan_every,
-            },
+            sources,
             selection: Selection {
                 include: raw.selection.include.clone(),
                 exclude: raw.selection.exclude.clone(),
@@ -1337,6 +1617,53 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
 }
 
 impl Config {
+    /// More than one source is configured (run names then start with the
+    /// source name).
+    #[must_use]
+    pub fn several(&self) -> bool {
+        self.sources.len() > 1
+    }
+
+    /// The source whose root holds `path` (the innermost one when roots
+    /// are nested).
+    #[must_use]
+    pub fn source_index_of(&self, path: &Path) -> Option<usize> {
+        self.sources
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| path.starts_with(&s.root.resolved))
+            .max_by_key(|(_, s)| s.root.resolved.components().count())
+            .map(|(i, _)| i)
+    }
+
+    /// Folder of a run of source `i` below `dest_root`: the source's `dest`
+    /// folder joined with the run path mapped by its `dest_starts_at`.
+    ///
+    /// Implements: SRS-SRC-003
+    ///
+    /// # Errors
+    /// A message when the run path cannot be mapped, or when the folder
+    /// would lie in the destination folder of another source.
+    pub fn dest_of(&self, i: usize, run_rel: &Path) -> std::result::Result<PathBuf, String> {
+        let s = self
+            .sources
+            .get(i)
+            .ok_or_else(|| format!("no source {}", i + 1))?;
+        let rel = crate::run::dest_rel(run_rel, s.dest_starts_at)?;
+        let full = s.dest.join(rel);
+        for (j, o) in self.sources.iter().enumerate() {
+            if j != i && !o.dest.as_os_str().is_empty() && full.starts_with(&o.dest) {
+                return Err(format!(
+                    "its destination {} is inside the folder {} of source {}; not offloaded",
+                    escape_control(&full.to_string_lossy()),
+                    escape_control(&o.dest.to_string_lossy()),
+                    o.name
+                ));
+            }
+        }
+        Ok(full)
+    }
+
     /// Human-readable summary of the effective settings, one per line.
     ///
     /// Implements: SRS-CFG-004
@@ -1370,40 +1697,77 @@ impl Config {
             _ => String::new(),
         };
         let t = &self.transfer;
-        let lines = [
-            (
-                "source.root",
+        let mut lines = Vec::new();
+        let count = self.sources.len();
+        for (i, src) in self.sources.iter().enumerate() {
+            // One source keeps the keys of earlier versions.
+            let k = |single: &str, several: &str| {
+                if count == 1 {
+                    single.to_owned()
+                } else {
+                    format!("source[{}] {several}", i + 1)
+                }
+            };
+            let level = match (src.layout, src.dest_starts_at) {
+                (Layout::Minknow, DestLevel::Experiment) => "<experiment>/<sample>/<run>/",
+                (_, DestLevel::Sample) => "<sample>/<run>/",
+                (_, DestLevel::Run) => "<run>/",
+                (_, DestLevel::Experiment) => "<path below the root>/",
+            };
+            let below = if src.dest.as_os_str().is_empty() {
+                String::new()
+            } else {
+                format!("{}/", src.dest.display())
+            };
+            lines.push((
+                k("source.root", "root"),
                 format!(
-                    "{} (device {}, layout {:?})",
-                    path(&self.source.root),
-                    self.source.root.dev,
-                    self.source.layout
-                ),
-            ),
-            (
-                "dest_root",
-                format!(
-                    "{} (device {}, target_id {})",
-                    path(&self.dest_root),
-                    self.dest_root.dev,
-                    self.target_id
-                ),
-            ),
-            (
-                "dest_starts_at",
-                format!(
-                    "{} (runs go to dest_root/{})",
-                    self.dest_starts_at.as_str(),
-                    match self.dest_starts_at {
-                        DestLevel::Experiment => "<experiment>/<sample>/<run>/",
-                        DestLevel::Sample => "<sample>/<run>/",
-                        DestLevel::Run => "<run>/",
+                    "{} (device {}, layout {}{})",
+                    path(&src.root),
+                    src.root.dev,
+                    src.layout.as_str(),
+                    if count == 1 {
+                        String::new()
+                    } else {
+                        format!(", name {}", src.name)
                     }
                 ),
+            ));
+            lines.push((
+                k("dest_starts_at", "dest_starts_at"),
+                format!(
+                    "{} (runs go to dest_root/{below}{level})",
+                    src.dest_starts_at.as_str()
+                ),
+            ));
+            lines.push((k("run markers", "run markers"), src.run_markers.join(", ")));
+            lines.push((
+                k("complete markers", "complete markers"),
+                src.complete_markers.join(", "),
+            ));
+            if count > 1 || !src.cleanup {
+                lines.push((
+                    k("source cleanup", "cleanup"),
+                    if src.cleanup {
+                        "may delete its runs"
+                    } else {
+                        "never deletes its runs"
+                    }
+                    .to_owned(),
+                ));
+            }
+        }
+        lines.push((
+            "dest_root".to_owned(),
+            format!(
+                "{} (device {}, target_id {})",
+                path(&self.dest_root),
+                self.dest_root.dev,
+                self.target_id
             ),
+        ));
+        let rest = [
             ("state_dir", path(&self.state_dir)),
-            ("run markers", self.source.run_markers.join(", ")),
-            ("complete markers", self.source.complete_markers.join(", ")),
             ("include", self.selection.include.join(", ")),
             ("exclude", self.selection.exclude.join(", ")),
             ("deferred", self.selection.defer_until_complete.join(", ")),
@@ -1451,8 +1815,15 @@ impl Config {
             ),
             ("guard fstypes", self.allowed_fstypes.join(", ")),
         ];
+        lines.extend(rest.into_iter().map(|(k, v)| (k.to_owned(), v)));
+        let width = lines
+            .iter()
+            .map(|(k, _)| k.len())
+            .max()
+            .unwrap_or(0)
+            .max(17);
         for (k, v) in lines {
-            let _ = writeln!(s, "  {k:<17} {}", escape_control(&v));
+            let _ = writeln!(s, "  {k:<width$} {}", escape_control(&v));
         }
         s
     }

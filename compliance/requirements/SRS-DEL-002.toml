@@ -10,4 +10,4 @@ verification = "Unit: one test per failing gate on simulated runs; fake-clock so
 
 [links]
 allocated_to = ["SWI-CLEANUP", "SWI-JOURNAL"]
-mitigates = ["HAZ-009"]
+mitigates = ["HAZ-009", "HAZ-022"]

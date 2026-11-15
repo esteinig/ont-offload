@@ -244,7 +244,11 @@
         },
         "name": {
           "type": "string",
-          "description": "Run path below the source root."
+          "description": "Run path below the source root; with several sources, prefixed by the source name and a slash."
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Name of the run's source; only present when several sources are configured (since v0.8)."
         },
         "source": {
           "type": "string",

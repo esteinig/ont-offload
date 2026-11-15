@@ -196,14 +196,14 @@ pub fn check_config(
     }
     writeln!(out, "runs detected: {}", det.runs.len())?;
     for r in &det.runs {
-        let mapped = run::dest_rel(&r.rel, cfg.dest_starts_at).map_or_else(
+        let mapped = cfg.dest_of(r.source, &r.rel).map_or_else(
             |e| format!("NOT MAPPED: {e}"),
             |d| escape_control(&cfg.dest_root.resolved.join(d).to_string_lossy()),
         );
         writeln!(
             out,
             "  {}  [{}; {}] -> {mapped}",
-            escape_control(&r.rel.to_string_lossy()),
+            escape_control(&r.label),
             escape_control(&r.marker),
             r.complete.as_deref().map_or_else(
                 || "running or no complete marker".to_owned(),
@@ -258,7 +258,7 @@ pub fn check_config(
 
 /// `run <path> [--completed]`: offload one completed run in the foreground.
 ///
-/// Implements: SRS-SEL-006, SRS-GRD-001, SRS-CLI-004
+/// Implements: SRS-SEL-006, SRS-GRD-001, SRS-CLI-004, SRS-SRC-001
 ///
 /// # Errors
 /// As [`run::offload`]; [`Error::Failed`] when files failed.
@@ -279,28 +279,39 @@ pub fn run_one(
     let real: PathBuf = fs
         .canonicalize(path)
         .map_err(|e| Error::Config(format!("run folder {shown}: {e}")))?;
-    let root = &cfg.source.root.resolved;
-    if !real.starts_with(root) || real == *root {
+    let Some(i) = cfg
+        .source_index_of(&real)
+        .filter(|i| real != cfg.sources[*i].root.resolved)
+    else {
+        let roots: Vec<String> = cfg
+            .sources
+            .iter()
+            .map(|s| escape_control(&s.root.resolved.to_string_lossy()))
+            .collect();
         return Err(Error::Config(format!(
             "run folder {shown} is not below source.root {}",
-            escape_control(&root.to_string_lossy())
+            roots.join(" or ")
         )));
-    }
-    let run_m = run::Markers::new(&cfg.source.run_markers)?;
-    let done_m = run::Markers::new(&cfg.source.complete_markers)?;
-    let detected = run::inspect(fs, root, &real, &run_m, &done_m)?.ok_or_else(|| {
-        Error::Config(format!(
-            "{shown} is not a run: none of {} found in it",
-            cfg.source.run_markers.join(", ")
-        ))
-    })?;
+    };
+    let src = &cfg.sources[i];
+    let root = &src.root.resolved;
+    let run_m = run::Markers::new(&src.run_markers)?;
+    let done_m = run::Markers::new(&src.complete_markers)?;
+    let detected = run::inspect(fs, root, &real, &run_m, &done_m)?
+        .ok_or_else(|| {
+            Error::Config(format!(
+                "{shown} is not a run: none of {} found in it",
+                src.run_markers.join(", ")
+            ))
+        })?
+        .of_source(cfg, i);
     let guard = guard_for(cfg, mountinfo);
     let _lock = sched::lock::InstanceLock::acquire(fs, &cfg.state_dir.resolved)?;
     let report = run::offload(cfg, fs, &guard, &detected, completed)?;
     writeln!(
         out,
         "{} -> {}: {}",
-        escape_control(&detected.rel.to_string_lossy()),
+        escape_control(&detected.label),
         escape_control(&report.dest.to_string_lossy()),
         if report.already_complete {
             "already complete".to_owned()
@@ -417,7 +428,11 @@ pub fn watch(
     log::info!(
         "ont-offload {} watching {} -> {}; effective configuration from {}:\n{}",
         env!("CARGO_PKG_VERSION"),
-        escape_control(&cfg.source.root.resolved.to_string_lossy()),
+        cfg.sources
+            .iter()
+            .map(|s| escape_control(&s.root.resolved.to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(", "),
         escape_control(&cfg.dest_root.resolved.to_string_lossy()),
         escape_control(&config_path.to_string_lossy()),
         cfg.summary().trim_end()
@@ -492,7 +507,7 @@ pub fn status(config_path: &Path, fs: &dyn Fs, json: bool, out: &mut dyn Write) 
 /// lock when `watch` holds it, and then does not add to
 /// `cleanup-reports.jsonl`. `now` is the wall-clock time for `delete_after`.
 ///
-/// Implements: SRS-DEL-001, SRS-DEL-006, SRS-CLI-001
+/// Implements: SRS-DEL-001, SRS-DEL-006, SRS-CLI-001, SRS-SRC-004
 ///
 /// # Errors
 /// [`Error::Config`] when deletion is off and no dry run was asked for, for
@@ -550,6 +565,15 @@ pub fn cleanup_runs(
                     escape_control(&p.to_string_lossy()),
                     escape_control(&state_dir.to_string_lossy())
                 )));
+            }
+            if let Some(src) = cfg.source_index_of(&p).map(|i| &cfg.sources[i]) {
+                if !src.cleanup {
+                    return Err(Error::Config(format!(
+                        "{} belongs to source {}, which never deletes its runs (cleanup = false)",
+                        escape_control(&p.to_string_lossy()),
+                        src.name
+                    )));
+                }
             }
             Some(p)
         }

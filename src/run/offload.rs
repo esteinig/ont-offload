@@ -16,7 +16,7 @@ use crate::guard::Guard;
 use crate::journal::{self, COMPLETE, Journal, Record, claim_on_share};
 use crate::logging::escape_control;
 
-use super::{DetectedRun, Markers, dest_rel, finalise, safe_join, select};
+use super::{DetectedRun, Markers, finalise, safe_join, select};
 
 /// Outcome of [`offload`].
 #[derive(Debug, Clone, Default)]
@@ -81,15 +81,19 @@ pub fn offload(
     run: &DetectedRun,
     assume_completed: bool,
 ) -> Result<OffloadReport> {
-    let name = escape_control(&run.rel.to_string_lossy());
+    let name = escape_control(&run.label);
+    let src = cfg
+        .sources
+        .get(run.source)
+        .ok_or_else(|| Error::Config(format!("run {name}: unknown source")))?;
     if run.complete.is_none() && !assume_completed {
         return Err(Error::Config(format!(
             "run {name} has no complete marker ({}); offloading live runs comes with `watch` in v0.3. \
              Use `run --completed` if the run has finished",
-            cfg.source.complete_markers.join(", ")
+            src.complete_markers.join(", ")
         )));
     }
-    let rel = dest_rel(&run.rel, cfg.dest_starts_at).map_err(Error::Config)?;
+    let rel = cfg.dest_of(run.source, &run.rel).map_err(Error::Config)?;
     let dest = safe_join(guard.dest(), &rel).map_err(Error::Config)?;
     guard.check(fs)?;
 
@@ -107,11 +111,11 @@ pub fn offload(
         dest: dest.clone(),
         ..OffloadReport::default()
     };
-    journal::claim(fs, state, &mut j, &run.path, &rel, cfg.dest_starts_at)?;
+    journal::claim(fs, state, &mut j, &run.path, &rel, src.dest_starts_at)?;
     let started = journal::now_rfc3339();
     let t0 = Instant::now();
 
-    let markers = Markers::new(&cfg.source.run_markers)?;
+    let markers = Markers::new(src.nested_markers())?;
     let sel = select(fs, &run.path, &cfg.selection, &markers)?;
     report.files = sel.files.len();
     report.bytes = sel.bytes();

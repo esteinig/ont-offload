@@ -1536,3 +1536,119 @@ fn soak_72h_with_hourly_verify_and_cleanup() {
     assert_eq!(w.stats.deleted_runs, deleted);
     assert_schema_valid(&mut w, &env, s(total + 4 * 3600));
 }
+
+impl Env {
+    /// MinKNOW runs in `data` and user datasets in `transfer` (layout
+    /// `ready`, into `dest_root/transfer`), with `extra` settings.
+    fn two_sources(&self, extra: &str) -> Config {
+        std::fs::create_dir_all(self.p("transfer")).unwrap();
+        let path = self.dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            format!(
+                "dest_root = {:?}\ntarget_id = {TARGET:?}\nstate_dir = {:?}\n\
+                 [[source]]\nroot = {:?}\n\
+                 [[source]]\nroot = {:?}\nlayout = \"ready\"\ndest = \"transfer\"\n\
+                 [outage]\nsource_free_alert = \"0B\"\n{extra}\n",
+                self.p("share").to_str().unwrap(),
+                self.p("state").to_str().unwrap(),
+                self.p("data").to_str().unwrap(),
+                self.p("transfer").to_str().unwrap(),
+            ),
+        )
+        .unwrap();
+        config::load(&path, &self.fs).unwrap().config
+    }
+}
+
+/// One daemon offloads a live MinKNOW run and a user dataset dropped with
+/// READY into one share, shows each run with its source, and its cleanup
+/// pass deletes the run but never the dataset.
+///
+/// Verifies: SRS-SRC-001, SRS-SRC-002, SRS-SRC-004, SRS-SRC-005, SRS-STATE-001
+#[test]
+fn runs_and_user_datasets_offload_side_by_side_and_only_runs_are_deleted() {
+    let env = Env::new();
+    let cfg = env.two_sources(
+        "[transfer]\nmin_free = \"1MB\"\nwatch_completed_for = \"30m\"\n\
+         [cleanup]\ndelete = \"on\"\ndelete_after = \"0s\"\n",
+    );
+    let mut engine = env.engine(
+        "seed = 9\nhours = 0.5\n[fake]\nsize_scale = 0.0002\n[[runs]]\nexperiment = \"e\"\nsample = \"s\"\n",
+    );
+    let mut w = env.watcher(cfg);
+    let set = env.p("transfer/alice/set1");
+    let files = [
+        ("reads/a.fastq", "aaaa"),
+        ("reads/deeper/b.fastq", "bbbbbb"),
+        ("notes.txt", "n"),
+    ];
+    let total = engine.total_seconds() as u64;
+    drive(&env, &mut w, &mut engine, 0, total + 600, 30, |t, w| {
+        if t == 300 {
+            for (rel, text) in files {
+                let p = set.join(rel);
+                std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+                std::fs::write(p, text).unwrap();
+            }
+        }
+        if t == 600 {
+            assert!(
+                !w.runs.keys().any(|k| k.starts_with(&set)),
+                "not offloaded before READY"
+            );
+            std::fs::write(set.join("READY"), b"").unwrap();
+        }
+    });
+    finish(&env, &mut engine);
+    let run = engine.run_dirs()[0].clone();
+    assert_eq!(w.stats.completed_runs, 2, "{:?}", w.stats);
+    env.matches_simulator(&run);
+    let dest = env.p("share/transfer/alice/set1");
+    for (rel, text) in files {
+        assert_eq!(
+            std::fs::read_to_string(dest.join(rel)).unwrap(),
+            text,
+            "{rel}"
+        );
+    }
+    assert!(dest.join(COMPLETE).exists() && dest.join("READY").exists());
+
+    let snap = w.snapshot(s(total + 600));
+    let mut names: Vec<(String, Option<String>)> = snap
+        .runs
+        .iter()
+        .map(|r| (r.name.clone(), r.source_name.clone()))
+        .collect();
+    names.sort();
+    let run_rel = run
+        .strip_prefix(env.p("data"))
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        names,
+        vec![
+            (format!("data/{run_rel}"), Some("data".to_owned())),
+            (
+                "transfer/alice/set1".to_owned(),
+                Some("transfer".to_owned())
+            ),
+        ]
+    );
+    assert_schema_valid(&mut w, &env, s(total + 600));
+
+    // Both retire, both copies are verified on the storage side, and the
+    // hourly passes delete the run only.
+    steps(&env, &mut w, total + 660, total + 3000, 60);
+    assert_eq!(storage_verify_all(&env, &[run.clone()]), 1);
+    crate::journal::verify(&RealFs, &dest, false).unwrap();
+    steps(&env, &mut w, total + 3060, total + 3 * 3600, 60);
+    assert!(!run.exists(), "the MinKNOW run is deleted");
+    assert_eq!(w.stats.deleted_runs, 1);
+    assert!(
+        set.join("notes.txt").exists(),
+        "the user dataset is never deleted"
+    );
+    env.matches_simulator(&run);
+}

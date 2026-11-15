@@ -1,0 +1,13 @@
+id = "SRS-SRC-002"
+type = "requirement"
+title = "User datasets marked READY"
+status = "draft"
+release = "v0.8"
+text = """
+A source with layout = "ready" treats a folder below its root that holds a file matching its run markers (default READY) as one dataset with all its files and subfolders; a READY further down is part of that dataset. Folders without the marker are never offloaded. The marker is also the complete marker, so the dataset is completed once every file has settled and settle_after_complete has passed; files that change while it is still watched (watch_completed_for) withdraw COMPLETE and are copied again.
+"""
+verification = "Unit: no detection before READY, one dataset with nested READY and subfolders offloaded whole; controller: files written before READY are not offloaded until it appears"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-CONFIG"]
+mitigates = ["HAZ-020"]

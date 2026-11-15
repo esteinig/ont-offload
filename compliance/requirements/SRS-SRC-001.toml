@@ -1,0 +1,13 @@
+id = "SRS-SRC-001"
+type = "requirement"
+title = "Several sources"
+status = "draft"
+release = "v0.8"
+text = """
+The configuration accepts [[source]] entries, each with its own root, name, layout, run and complete markers, ignore list, rescan interval, destination folder below dest_root (dest), dest_starts_at and cleanup switch; [source] remains one source. One watch process scans every source and shares one destination guard (the share must be on a different device from every source root), one worker pool and rate limit, one state folder and one dashboard. A source root inside another source's root is scanned only by the inner source.
+"""
+verification = "Unit: loading several sources with defaults, nested roots skipped by the outer source, detection across sources; controller: a live MinKNOW run and a user dataset offloaded side by side; integration: check-config, run and verify through the binary"
+
+[links]
+allocated_to = ["SWI-CONFIG", "SWI-RUN", "SWI-SCHED", "SWI-GUARD", "SWI-CLI"]
+mitigates = ["HAZ-021"]

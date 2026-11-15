@@ -212,7 +212,8 @@ struct DestInfo {
 ///
 /// Implements: SRS-LIVE-001, SRS-LIVE-003, SRS-LIVE-004, SRS-PAR-001,
 /// SRS-PAR-003, SRS-RES-001, SRS-RES-002, SRS-RES-003, SRS-RES-005,
-/// SRS-RES-006, SRS-RES-008, SRS-RES-009, SRS-SEL-008, SRS-STATE-001
+/// SRS-RES-006, SRS-RES-008, SRS-RES-009, SRS-SEL-008, SRS-STATE-001,
+/// SRS-SRC-001
 pub struct Watcher {
     cfg: Config,
     fs: Arc<dyn Fs>,
@@ -222,7 +223,8 @@ pub struct Watcher {
     pool: Pool,
     rate: Arc<RateLimiter>,
     outage: Tracker,
-    markers: Markers,
+    /// Nested-run markers, by source.
+    markers: Vec<Markers>,
     /// Runs being offloaded, by source path.
     pub runs: BTreeMap<PathBuf, LiveRun>,
     /// Completed runs under watch, by source path.
@@ -269,7 +271,7 @@ fn level_str(level: log::Level) -> &'static str {
 }
 
 fn rel_of(det: &DetectedRun) -> String {
-    det.rel.to_string_lossy().into_owned()
+    det.label.clone()
 }
 
 impl Watcher {
@@ -308,7 +310,11 @@ impl Watcher {
             &rate,
             &clock,
         )?;
-        let markers = Markers::new(&cfg.source.run_markers)?;
+        let markers = cfg
+            .sources
+            .iter()
+            .map(|s| Markers::new(s.nested_markers()))
+            .collect::<Result<Vec<_>>>()?;
         let outage = Tracker::new(&cfg.outage);
         let state = StateWriter::new(
             &*fs,
@@ -848,7 +854,11 @@ impl Watcher {
     ///
     /// Implements: SRS-RES-009
     fn refresh(&mut self, now: Duration, d: DetectedRun) {
-        let full_every = self.cfg.source.full_rescan_every;
+        let Some(src) = self.cfg.sources.get(d.source) else {
+            return;
+        };
+        let full_every = src.full_rescan_every;
+        let markers = &self.markers[d.source];
         let Some(r) = self.runs.get_mut(&d.path) else {
             return;
         };
@@ -877,7 +887,7 @@ impl Watcher {
             &*self.fs,
             &det.path,
             &self.cfg.selection,
-            &self.markers,
+            markers,
             cache,
             &known,
         );
@@ -891,7 +901,7 @@ impl Watcher {
             Err(e) => {
                 let msg = format!(
                     "run {}: cannot list files: {e}",
-                    escape_control(&r.det.rel.to_string_lossy())
+                    escape_control(&r.det.label)
                 );
                 self.warn_once(&msg);
             }
@@ -902,8 +912,14 @@ impl Watcher {
     ///
     /// Implements: SRS-STATE-003
     fn source_space(&mut self) {
-        let free = self.fs.free_space(&self.cfg.source.root.resolved).ok();
-        self.source_free = free.filter(|f| *f != u64::MAX);
+        // The fullest source disk counts.
+        self.source_free = self
+            .cfg
+            .sources
+            .iter()
+            .filter_map(|s| self.fs.free_space(&s.root.resolved).ok())
+            .filter(|f| *f != u64::MAX)
+            .min();
         let limit = self.cfg.outage.source_free_alert;
         let Some(free) = self.source_free else {
             return;
@@ -953,13 +969,18 @@ impl Watcher {
     /// Implements: SRS-LIVE-004, SRS-RES-008
     fn watch_completed(&mut self, now: Duration, present: &BTreeSet<PathBuf>) -> Result<()> {
         let window = self.cfg.transfer.watch_completed_for;
-        let full_every = self.cfg.source.full_rescan_every;
         let keys: Vec<PathBuf> = self.completed.keys().cloned().collect();
         for key in keys {
             let Some(c) = self.completed.get_mut(&key) else {
                 continue;
             };
             let rel = rel_of(&c.det);
+            let src = c.det.source;
+            let full_every = self
+                .cfg
+                .sources
+                .get(src)
+                .map_or(Duration::from_secs(600), |s| s.full_rescan_every);
             if now.saturating_sub(c.completed) >= window || !present.contains(&key) {
                 let gone = !present.contains(&key);
                 self.completed.remove(&key);
@@ -991,7 +1012,7 @@ impl Watcher {
             if !full_due && !run::signature_changed(&*self.fs, &c.sig) {
                 continue;
             }
-            let sel = match run::select(&*self.fs, &key, &self.cfg.selection, &self.markers) {
+            let sel = match run::select(&*self.fs, &key, &self.cfg.selection, &self.markers[src]) {
                 Ok(s) => s,
                 Err(e) => {
                     let msg = format!("run {}: cannot list files: {e}", escape_control(&rel));
@@ -1091,7 +1112,8 @@ impl Watcher {
     }
 
     fn track(&mut self, now: Duration, d: &DetectedRun) -> Result<Tracked> {
-        let rel = run::dest_rel(&d.rel, self.cfg.dest_starts_at).map_err(Error::Config)?;
+        let rel = self.cfg.dest_of(d.source, &d.rel).map_err(Error::Config)?;
+        let level = self.cfg.sources[d.source].dest_starts_at;
         let dest = safe_join(self.guard.dest(), &rel).map_err(Error::Config)?;
         let state = &self.cfg.state_dir.resolved;
         let mut j = Journal::open(&*self.fs, state, &d.path)?;
@@ -1107,22 +1129,20 @@ impl Watcher {
         if j.deleting.is_some() {
             log::info!(
                 "run {}: being deleted by cleanup; not offloaded again",
-                escape_control(&d.rel.to_string_lossy())
+                escape_control(&d.label)
             );
             return Ok(Tracked::Retired);
         }
-        journal::claim(
-            &*self.fs,
-            state,
-            &mut j,
-            &d.path,
-            &rel,
-            self.cfg.dest_starts_at,
-        )?;
-        let name = escape_control(&d.rel.to_string_lossy());
+        journal::claim(&*self.fs, state, &mut j, &d.path, &rel, level)?;
+        let name = escape_control(&d.label);
         let mut withdraw = false;
         if j.complete.is_some() {
-            let sel = run::select(&*self.fs, &d.path, &self.cfg.selection, &self.markers)?;
+            let sel = run::select(
+                &*self.fs,
+                &d.path,
+                &self.cfg.selection,
+                &self.markers[d.source],
+            )?;
             let same = sel.files.iter().all(|f| {
                 j.files
                     .get(&f.rel)
@@ -1779,6 +1799,7 @@ impl Watcher {
             runs.push(state::RunState {
                 run_id: r.journal.id.clone(),
                 name: escape_control(&rel_of(&r.det)),
+                source_name: self.source_name(r.det.source),
                 source: escape_control(&r.det.path.to_string_lossy()),
                 destination: escape_control(&r.dest.to_string_lossy()),
                 phase: if r.broken.is_some() {
@@ -1818,6 +1839,7 @@ impl Watcher {
             runs.push(state::RunState {
                 run_id: c.id.clone(),
                 name: escape_control(&rel_of(&c.det)),
+                source_name: self.source_name(c.det.source),
                 source: escape_control(&c.det.path.to_string_lossy()),
                 destination: escape_control(&c.dest.to_string_lossy()),
                 phase: "complete".into(),
@@ -1868,7 +1890,7 @@ impl Watcher {
             }
             .into(),
             target_id: self.cfg.target_id.clone(),
-            source_root: escape_control(&self.cfg.source.root.resolved.to_string_lossy()),
+            source_root: escape_control(&self.cfg.sources[0].root.resolved.to_string_lossy()),
             destination: state::Destination {
                 root: escape_control(&self.guard.dest().to_string_lossy()),
                 fstype: self.dest_info.fstype.clone(),
@@ -1933,6 +1955,16 @@ impl Watcher {
     // -----------------------------------------------------------------
 
     /// Wall-clock time at clock reading `now` (a fake clock moves it too).
+    /// Source name for `state.json`, only when several sources are configured.
+    ///
+    /// Implements: SRS-SRC-005
+    fn source_name(&self, i: usize) -> Option<String> {
+        self.cfg
+            .several()
+            .then(|| self.cfg.sources.get(i).map(|s| s.name.clone()))
+            .flatten()
+    }
+
     fn wall(&self, now: Duration) -> SystemTime {
         self.wall0 + now
     }

@@ -408,6 +408,7 @@ pub fn claim(
     }
     let dir = state_dir.join("claims");
     fs.create_dir_all(&dir)?;
+    nested_claim(fs, &dir, dest_rel, &src)?;
     let path = dir.join(format!("{}.json", &sha256_hex(dest.as_bytes())[..24]));
     let body = serde_json::json!({ "dest": dest, "source": src, "run_id": journal.id });
     match fs.create_new(&path) {
@@ -443,6 +444,46 @@ pub fn claim(
             ts: now_rfc3339(),
         },
     )
+}
+
+/// Refuse a destination folder that holds, or lies inside, the folder of
+/// another run (for example a dataset marked `READY` around a subfolder
+/// that was already offloaded as a dataset of its own): the two would
+/// write into each other's files.
+///
+/// Implements: SRS-SRC-003
+fn nested_claim(fs: &dyn Fs, claims: &Path, dest: &Path, src: &str) -> Result<()> {
+    for e in fs.read_dir(claims)? {
+        let Ok(bytes) = fs.read(&claims.join(&e.name)) else {
+            continue;
+        };
+        let other: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+        let (Some(d), Some(s)) = (
+            other.get("dest").and_then(|v| v.as_str()),
+            other.get("source").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+        let d = Path::new(d);
+        if s == src || d == dest {
+            continue;
+        }
+        if d.starts_with(dest) || dest.starts_with(d) {
+            return Err(Error::Integrity(format!(
+                "destination {} {} the destination {} of run {}; not mixing the two. \
+                 Mark only the top folder of a dataset, or move one of them",
+                escape_control(&dest.to_string_lossy()),
+                if d.starts_with(dest) {
+                    "holds"
+                } else {
+                    "lies inside"
+                },
+                escape_control(&d.to_string_lossy()),
+                escape_control(s)
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Escape a path for a `sha256sum` line: `\` and newline are escaped and the

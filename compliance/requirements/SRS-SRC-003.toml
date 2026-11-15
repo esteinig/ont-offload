@@ -1,0 +1,13 @@
+id = "SRS-SRC-003"
+type = "requirement"
+title = "Separate destinations per source"
+status = "draft"
+release = "v0.8"
+text = """
+Source names, roots and destination folders must be distinct; destination folders may not lie inside each other, and at most one source writes into dest_root itself. A run whose destination would lie inside another source's folder is refused with an alert, and so is a run whose destination holds, or lies inside, the destination of another run already claimed (for example a dataset marked around a subfolder that was offloaded on its own). Nothing of a refused run is written.
+"""
+verification = "Unit: overlapping, nested, duplicate and non-plain destination folders and duplicate names and roots are configuration errors; mapping into another source's folder is refused; a dataset around an offloaded one is refused and writes nothing"
+
+[links]
+allocated_to = ["SWI-CONFIG", "SWI-JOURNAL"]
+mitigates = ["HAZ-021"]
