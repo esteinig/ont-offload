@@ -25,7 +25,7 @@ jobs:
       matrix:
         share: [nfs, smb]
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"

@@ -26,7 +26,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"
@@ -38,7 +38,7 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"
@@ -62,7 +62,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"
@@ -79,7 +79,7 @@ jobs:
       pull-requests: write
       checks: write
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v4 # pin to a commit SHA
@@ -110,7 +110,7 @@ jobs:
     name: supply-chain
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
         with:
           toolchain: "1.85"
@@ -135,7 +135,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
         with:
           fetch-depth: 0
       - name: Branch name
@@ -168,7 +168,7 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: taiki-e/install-action@v2 # pin to a commit SHA
         with:
           tool: mdbook

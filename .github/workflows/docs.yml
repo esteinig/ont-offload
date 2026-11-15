@@ -23,7 +23,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: actions/checkout@v7 # pin to a commit SHA
       - uses: taiki-e/install-action@v2 # pin to a commit SHA
         with:
           tool: mdbook
