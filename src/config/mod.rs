@@ -11,6 +11,7 @@
 //! through a symlink), or that resolves into the other side of the transfer is
 //! refused before anything is read or written.
 
+pub mod init;
 pub mod units;
 
 use std::fmt::Write as _;

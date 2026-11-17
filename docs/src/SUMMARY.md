@@ -5,6 +5,7 @@
 # User guide
 
 - [Installation](user-guide/installation.md)
+- [Setting up with init](user-guide/init.md)
 - [Deploying on a sequencer](user-guide/deployment.md)
 - [Testing on a laptop](user-guide/local-testing.md)
 - [Usage](user-guide/usage.md)

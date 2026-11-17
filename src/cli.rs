@@ -119,6 +119,14 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Write a configuration from a preset, create its folders, prepare and
+    /// probe the share, then print what to do next.
+    ///
+    /// Presets: `local` (laptop test bench with a tmpfs share), `test`
+    /// (rehearsal against a real share from a user's home folder) and
+    /// `production` (the service on a sequencer). Every value can be changed
+    /// with a flag, and any other setting with `--set KEY=VALUE`.
+    Init(Box<InitArgs>),
     /// Validate configuration, paths, run detection and the destination guard without copying.
     CheckConfig,
     /// Measure the share and suggest workers, `rate_limit` and `chunk_size`.
@@ -169,6 +177,129 @@ pub enum Command {
     },
 }
 
+/// Options of `init`.
+#[derive(Debug, Clone, Default, Args)]
+#[allow(clippy::struct_excessive_bools)] // independent command-line switches
+pub struct InitArgs {
+    /// Starting point for every setting.
+    #[arg(long, short = 'p', value_enum, default_value_t = Preset::Local)]
+    pub preset: Preset,
+    /// Destination folder on the share (`dest_root`) [default: local
+    /// /dev/shm/ont-share; required for test and production].
+    #[arg(long, short = 's', value_name = "DIR")]
+    pub share: Option<PathBuf>,
+    /// Id written to the share's sentinel (`target_id`) [default: local
+    /// `local-test`, test `<host>-test`, production `<host>`].
+    #[arg(long, value_name = "ID")]
+    pub target_id: Option<String>,
+    /// Folder for the configuration, state, logs and notify script
+    /// [default: local ~/ont-local, test ~/ont-offload-test; production
+    /// uses /etc, /var/lib and /var/log unless given].
+    #[arg(long, short = 'w', value_name = "DIR")]
+    pub work_dir: Option<PathBuf>,
+    /// Folder holding the MinKNOW runs; `transfer/` and `simulation/` go
+    /// below it [default: local <work-dir>/data, otherwise /data].
+    #[arg(long, short = 'd', value_name = "DIR")]
+    pub data: Option<PathBuf>,
+    /// Root of the `runs` source (MinKNOW output) [default: <data>].
+    #[arg(long, value_name = "DIR", conflicts_with = "no_runs")]
+    pub runs: Option<PathBuf>,
+    /// Root of the `transfer` source (user datasets marked READY)
+    /// [default: <data>/transfer].
+    #[arg(long, value_name = "DIR", conflicts_with = "no_transfer")]
+    pub transfer: Option<PathBuf>,
+    /// Root of the `simulation` source (ont-runsim test runs)
+    /// [default: <data>/simulation].
+    #[arg(long, value_name = "DIR", conflicts_with = "no_simulation")]
+    pub simulation: Option<PathBuf>,
+    /// Leave out the `runs` source.
+    #[arg(long)]
+    pub no_runs: bool,
+    /// Leave out the `transfer` source.
+    #[arg(long)]
+    pub no_transfer: bool,
+    /// Leave out the `simulation` source.
+    #[arg(long)]
+    pub no_simulation: bool,
+    /// Journal and state folder (`state_dir`) [default: <work-dir>/state].
+    #[arg(long, value_name = "DIR")]
+    pub state_dir: Option<PathBuf>,
+    /// Log file of the daemon (`logging.file`)
+    /// [default: <work-dir>/logs/ont-offload.log].
+    #[arg(long, value_name = "FILE")]
+    pub log: Option<PathBuf>,
+    /// Where to write the configuration [default: <work-dir>/config.toml,
+    /// production /etc/ont-offload/config.toml].
+    #[arg(long, short = 'o', value_name = "FILE")]
+    pub output: Option<PathBuf>,
+    /// Filesystem type the share may have (`guard.allowed_fstypes`);
+    /// repeat for several [default: local tmpfs, otherwise nfs, nfs4,
+    /// cifs, smb3].
+    #[arg(long = "fstype", value_name = "TYPE")]
+    pub fstypes: Vec<String>,
+    /// Files copied at the same time (`bandwidth.workers`).
+    #[arg(long)]
+    pub workers: Option<u32>,
+    /// Total transfer rate (`bandwidth.rate_limit`), e.g. 100MB/s.
+    #[arg(long, value_name = "RATE")]
+    pub rate_limit: Option<String>,
+    /// Free space to keep on the share (`transfer.min_free`), e.g. 500GiB.
+    #[arg(long, value_name = "SIZE")]
+    pub min_free: Option<String>,
+    /// Deleting offloaded runs from the sequencer (`cleanup.delete`):
+    /// off, dry-run or on.
+    #[arg(long, value_name = "MODE", value_parser = ["off", "dry-run", "on"])]
+    pub cleanup: Option<String>,
+    /// Program run for each alert (`outage.notify_command`); "" for none
+    /// [default: local and test a notify.sh in the work folder that
+    /// appends to notify.log].
+    #[arg(long, value_name = "PROGRAM")]
+    pub notify_command: Option<String>,
+    /// Any other setting, as `key`, `section.key` or `source.<name>.key`
+    /// with a TOML value (a bare word is taken as text); repeatable.
+    #[arg(long = "set", value_name = "KEY=VALUE")]
+    pub set: Vec<String>,
+    /// Write nothing to the share: no folder, sentinel or probe (for a share
+    /// that is not mounted yet).
+    #[arg(long)]
+    pub no_probe: bool,
+    /// Print the configuration and change nothing.
+    #[arg(long)]
+    pub print: bool,
+    /// Replace an existing configuration file (the old one is kept as
+    /// `<file>.bak`).
+    #[arg(long)]
+    pub force: bool,
+}
+
+/// Presets of `init`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum Preset {
+    /// Laptop test bench: tmpfs share in /dev/shm, everything in
+    /// ~/ont-local, short timings, cleanup as a dry run.
+    #[default]
+    Local,
+    /// Rehearsal against the real share as a normal user: own folder on
+    /// the share, everything else in ~/ont-offload-test, short timings,
+    /// cleanup as a dry run.
+    Test,
+    /// The service on a sequencer: /etc, /var/lib and /var/log, production
+    /// timings, cleanup off.
+    Production,
+}
+
+impl Preset {
+    /// Name as typed on the command line.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Test => "test",
+            Self::Production => "production",
+        }
+    }
+}
+
 /// On or off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Switch {
@@ -205,6 +336,7 @@ impl Command {
             Self::Run { .. } => "run",
             Self::Verify { .. } => "verify",
             Self::Status { .. } => "status",
+            Self::Init(_) => "init",
             Self::CheckConfig => "check-config",
             Self::Bench { .. } => "bench",
             Self::Cleanup { .. } => "cleanup",
@@ -222,6 +354,7 @@ impl Command {
             Self::Status { .. } | Self::Bench { .. } => "v0.4",
             Self::Cleanup { .. } => "v0.5",
             Self::Tui { .. } => "v0.6",
+            Self::Init(_) => "v0.9",
         }
     }
 }
@@ -254,6 +387,25 @@ mod tests {
             ],
             vec!["ont-offload", "status", "--json"],
             vec!["ont-offload", "check-config"],
+            vec!["ont-offload", "init"],
+            vec![
+                "ont-offload",
+                "init",
+                "--preset",
+                "production",
+                "--share",
+                "/mnt/nas/ont",
+                "--target-id",
+                "lab-nas-01",
+                "--data",
+                "/data/data-offload",
+                "--no-simulation",
+                "--fstype",
+                "nfs4",
+                "--set",
+                "transfer.settle=\"10s\"",
+                "--print",
+            ],
             vec!["ont-offload", "bench"],
             vec![
                 "ont-offload",
