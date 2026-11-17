@@ -1,0 +1,13 @@
+id = "SRS-RPT-005"
+type = "requirement"
+title = "Reports only read"
+status = "draft"
+release = "v0.9"
+text = """
+Reports read the state folder, the log and the share without changing them, and write only into the output folder: the JSON record, the PDF or typst source when asked for, and a sha256sum file of them, each written atomically. The configuration is optional when --state-dir is given.
+"""
+verification = "Integration: the state folder is byte-identical after a report; files appear only in --out"
+
+[links]
+allocated_to = ["SWI-REPORT"]
+mitigates = ["HAZ-023"]

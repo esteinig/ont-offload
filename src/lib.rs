@@ -16,6 +16,7 @@ pub mod fsio;
 pub mod guard;
 pub mod journal;
 pub mod logging;
+pub mod report;
 pub mod run;
 pub mod sched;
 pub mod state;
@@ -85,6 +86,26 @@ pub fn execute(cli: &Cli) -> Result<()> {
             *dry_run,
             run.as_deref(),
             std::time::SystemTime::now(),
+            out,
+        ),
+        Command::Report {
+            kind: cli::ReportCmd::Status(a),
+        } => report::status_report(
+            &cli.global.config,
+            &RealFs,
+            &report::StatusArgs {
+                from: a.from.clone(),
+                to: a.to.clone(),
+                month: a.month.clone(),
+                last: a.last.clone(),
+                state_dir: a.state_dir.clone(),
+                log: a.log.clone(),
+                out: a.out.clone(),
+                format: a.format.clone(),
+                check_destination: a.check_destination,
+                appendix: a.appendix,
+            },
+            report::time::now(),
             out,
         ),
         Command::Tui {

@@ -1,0 +1,13 @@
+id = "SRS-RPT-002"
+type = "requirement"
+title = "Record completeness"
+status = "draft"
+release = "v0.9"
+text = """
+A report lists every record it read (event files, log files) with the number of files and lines, the first and last entry, and every gap: an unreadable file, lines that do not parse (except a torn last line of the live event stream), event sequence numbers missing within one start of the daemon, no event or log files at all. Any gap makes the status verdict "action required"; records that start after the beginning of the period need attention.
+"""
+verification = "Unit: sequence gap, missing records, text, JSON, rotated and gzip logs"
+
+[links]
+allocated_to = ["SWI-REPORT"]
+mitigates = ["HAZ-023"]

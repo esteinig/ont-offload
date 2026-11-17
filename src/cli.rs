@@ -167,6 +167,61 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Clinical operations reports (PDF and JSON).
+    Report {
+        /// Which report.
+        #[command(subcommand)]
+        kind: ReportCmd,
+    },
+}
+
+/// Reports.
+#[derive(Debug, Subcommand)]
+pub enum ReportCmd {
+    /// What ont-offload did over a period, from its event, log and journal
+    /// records: runs, data, incidents, sessions, cleanup and record
+    /// completeness, with a verdict.
+    Status(StatusReportArgs),
+}
+
+/// `report status`.
+#[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("when").args(["month", "last", "from"])))]
+#[command(group(clap::ArgGroup::new("until").args(["month", "last", "to"])))]
+pub struct StatusReportArgs {
+    /// First day (2026-10-01) or time (RFC 3339) of the period, UTC
+    /// [default: 30 days before --to].
+    #[arg(long)]
+    pub from: Option<String>,
+    /// Last day (inclusive) or end time of the period, UTC [default: now].
+    #[arg(long)]
+    pub to: Option<String>,
+    /// A calendar month, e.g. 2026-10.
+    #[arg(long)]
+    pub month: Option<String>,
+    /// The time up to now, e.g. 7d or 24h.
+    #[arg(long)]
+    pub last: Option<String>,
+    /// State folder of the daemon [default: `state_dir` of the configuration].
+    #[arg(long)]
+    pub state_dir: Option<PathBuf>,
+    /// The daemon's log file; its rotations are read too [default:
+    /// `logging.file` of the configuration].
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+    /// Folder for the report files.
+    #[arg(long, short, default_value = ".")]
+    pub out: PathBuf,
+    /// Comma-separated output formats.
+    #[arg(long, default_value = "json")]
+    pub format: String,
+    /// Also read each completed run's VERIFIED.json on the share.
+    #[arg(long)]
+    pub check_destination: bool,
+    /// Append every event of the period (except per-file commits) and every
+    /// warning and error log line.
+    #[arg(long)]
+    pub appendix: bool,
 }
 
 /// On or off.
@@ -209,6 +264,7 @@ impl Command {
             Self::Bench { .. } => "bench",
             Self::Cleanup { .. } => "cleanup",
             Self::Tui { .. } => "tui",
+            Self::Report { .. } => "report",
         }
     }
 
@@ -222,6 +278,7 @@ impl Command {
             Self::Status { .. } | Self::Bench { .. } => "v0.4",
             Self::Cleanup { .. } => "v0.5",
             Self::Tui { .. } => "v0.6",
+            Self::Report { .. } => "v0.9",
         }
     }
 }
@@ -266,6 +323,22 @@ mod tests {
             ],
             vec!["ont-offload", "cleanup", "--dry-run"],
             vec!["ont-offload", "tui"],
+            vec!["ont-offload", "report", "status", "--month", "2026-10"],
+            vec![
+                "ont-offload",
+                "report",
+                "status",
+                "--from",
+                "2026-10-01",
+                "--to",
+                "2026-10-31",
+                "--state-dir",
+                "/var/lib/x",
+                "--out",
+                "/tmp",
+                "--check-destination",
+                "--appendix",
+            ],
             vec![
                 "ont-offload",
                 "tui",

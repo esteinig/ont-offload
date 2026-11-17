@@ -10,4 +10,4 @@ verification = "Unit: 300 events over many rotations read back once and in order
 
 [links]
 allocated_to = ["SWI-STATE", "SWI-LOG", "SWI-JOURNAL", "SWI-SCHED"]
-mitigates = ["HAZ-018"]
+mitigates = ["HAZ-018", "HAZ-023"]

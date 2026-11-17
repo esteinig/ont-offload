@@ -2374,7 +2374,7 @@ impl Watcher {
             None,
             None,
             &format!("ont-offload {} watching", env!("CARGO_PKG_VERSION")),
-            json!({"pid": std::process::id()}),
+            json!({"pid": std::process::id(), "version": env!("CARGO_PKG_VERSION")}),
         );
         self.publish(started, true);
         loop {
