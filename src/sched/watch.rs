@@ -242,6 +242,7 @@ pub struct Watcher {
     dest_info: DestInfo,
     source_free: Option<u64>,
     source_low: bool,
+    records_low: bool,
     alerts: BTreeMap<String, state::Alert>,
     recent: VecDeque<(Duration, u64)>,
     cursor: Option<PathBuf>,
@@ -348,6 +349,7 @@ impl Watcher {
             dest_info: DestInfo::default(),
             source_free: None,
             source_low: false,
+            records_low: false,
             alerts: BTreeMap::new(),
             recent: VecDeque::new(),
             cursor: None,
@@ -793,6 +795,7 @@ impl Watcher {
     pub fn scan(&mut self, now: Duration) -> Result<()> {
         self.last_scan = Some(now);
         self.source_space();
+        self.records_space();
         let det = run::detect(&self.cfg, &*self.fs)?;
         for w in det.warnings {
             self.warn_once(&w);
@@ -960,6 +963,68 @@ impl Watcher {
                 json!({"free_bytes": free}),
             );
             self.clear("source_space");
+        }
+    }
+
+    /// Free space where the records are kept (`state_dir` and the log
+    /// file's folder) against `state.free_alert`: the records are never
+    /// pruned, so a person must hear before the disk fills.
+    ///
+    /// Implements: SRS-LOG-006
+    fn records_space(&mut self) {
+        let limit = self.cfg.state.free_alert;
+        if limit == 0 {
+            return;
+        }
+        let mut dirs = vec![self.cfg.state_dir.resolved.clone()];
+        if let Some(dir) = self.cfg.log_file.as_deref().and_then(Path::parent) {
+            dirs.push(dir.to_path_buf());
+        }
+        let Some((free, dir)) = dirs
+            .iter()
+            .filter_map(|d| self.fs.free_space(d).ok().map(|f| (f, d)))
+            .filter(|(f, _)| *f != u64::MAX)
+            .min_by_key(|(f, _)| *f)
+        else {
+            return;
+        };
+        let low = free < limit;
+        if low == self.records_low {
+            return;
+        }
+        self.records_low = low;
+        let shown = escape_control(&dir.to_string_lossy());
+        if low {
+            let msg = format!(
+                "{shown} has {} free, below state.free_alert {}; events and logs are kept forever and need room",
+                config::units::Bytes(free),
+                config::units::Bytes(limit)
+            );
+            self.emit(
+                Kind::RecordsSpaceLow,
+                log::Level::Error,
+                None,
+                None,
+                &msg,
+                json!({"free_bytes": free, "limit": limit, "path": shown}),
+            );
+            self.raise(
+                "records_space",
+                Kind::RecordsSpaceLow,
+                log::Level::Error,
+                None,
+                &msg,
+            );
+        } else {
+            self.emit(
+                Kind::RecordsSpaceOk,
+                log::Level::Info,
+                None,
+                None,
+                &format!("{shown} has {} free again", config::units::Bytes(free)),
+                json!({"free_bytes": free, "path": shown}),
+            );
+            self.clear("records_space");
         }
     }
 

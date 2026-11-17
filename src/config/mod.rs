@@ -234,8 +234,12 @@ pub fn logging_settings(path: &Path) -> Option<(Option<PathBuf>, LogFormat)> {
 pub struct RawState {
     /// How often `state.json` is rewritten.
     pub interval: String,
-    /// Size at which `events.jsonl` is rotated to `events.jsonl.1`.
+    /// Size at which `events.jsonl` is rotated to `events.jsonl.1` (older
+    /// segments move to `events/` and are kept).
     pub events_max_size: String,
+    /// Raise `records_space_low` when the disk of `state_dir` or of the
+    /// log file has less free space than this (`0` turns it off).
+    pub free_alert: String,
 }
 
 impl Default for RawState {
@@ -243,6 +247,7 @@ impl Default for RawState {
         Self {
             interval: "2s".into(),
             events_max_size: "64MB".into(),
+            free_alert: "5GB".into(),
         }
     }
 }
@@ -708,6 +713,8 @@ pub struct StateCfg {
     pub interval: Duration,
     /// `events.jsonl` rotation size in bytes.
     pub events_max_size: u64,
+    /// Free space below which `records_space_low` is raised (0: off).
+    pub free_alert: u64,
 }
 
 /// `[selection]`, validated.
@@ -1424,6 +1431,7 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     {
         c.problem("state.events_max_size", "must be at least 1MiB");
     }
+    let state_free_alert = c.size("state.free_alert", &raw.state.free_alert);
     let file_mode = match u32::from_str_radix(t.file_mode.trim_start_matches("0o"), 8) {
         Ok(m) if m <= 0o777 && m & 0o600 == 0o600 => m,
         Ok(m) if m <= 0o777 => {
@@ -1610,6 +1618,7 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
             state: StateCfg {
                 interval: state_interval,
                 events_max_size,
+                free_alert: state_free_alert,
             },
         },
         warnings: c.warnings,

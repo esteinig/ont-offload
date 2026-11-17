@@ -38,7 +38,7 @@ The dashboard's logic is tested without a terminal. `src/tui/model/tests.rs` run
 
 ## Deployment files
 
-`tests/packaging.rs` checks the deployment files: the unit runs as `ont-offload` with `0750` state and log folders, umask `0027` and its restart rules; `sysusers` creates the user; logrotate renames (no `copytruncate`) and creates the log `0640`; the shell scripts parse. The log file's rotation, the share write probe and `verify --against` have unit tests, and `tests/offload.rs` runs `check-config` (probe), `verify --against` and `scripts/compare-with-legacy.sh` through the binary on a tmpfs share.
+`tests/packaging.rs` checks the deployment files: the unit runs as `ont-offload` with `0750` state and log folders, umask `0027` and its restart rules; `sysusers` creates the user; logrotate renames (no `copytruncate`), creates the log `0640` and never removes or compresses an old log (`rotate -1`); the shell scripts parse. The log file's rotation, the share write probe and `verify --against` have unit tests, and `tests/offload.rs` runs `check-config` (probe), `verify --against` and `scripts/compare-with-legacy.sh` through the binary on a tmpfs share.
 
 ## State schemas
 

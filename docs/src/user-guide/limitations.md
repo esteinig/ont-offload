@@ -25,7 +25,7 @@ Status as of v0.8.
 
 | Limitation in v0.6 | Hazard | Control in v0.7 | What remains |
 | --- | --- | --- | --- |
-| **The log file grew without limit**, and logrotate renaming it left the daemon writing to the renamed file. | HAZ-018 (serious) | SRS-LOG-005: the log is reopened by name within a second of a rotation; `packaging/ont-offload.logrotate` rotates weekly or at 100 MB. | None. |
+| **The log file grew without limit**, and logrotate renaming it left the daemon writing to the renamed file. | HAZ-018 (serious) | SRS-LOG-005: the log is reopened by name within a second of a rotation; `packaging/ont-offload.logrotate` rotates weekly or at 100 MB. Since v0.9 (SRS-LOG-006) no log or event is ever removed, for a clinical lookback, and `state.free_alert` raises `records_space_low` before their disk fills. | Plan disk space for the records: roughly the size of `events.jsonl` segments and logs per month on your site. |
 | **The service ran as root**, so on an NFS export with `root_squash` its files arrived as `nobody`, and nothing showed who would own the copies. | HAZ-019 (minor) | SRS-DEP-001: the unit runs as the user `ont-offload` with private state and logs. SRS-GRD-004: `check-config` writes a probe file on the share and reports its owner and mode, with warnings for root, mapped owners and lost modes. | Whether the receiving side can read the copies is checked by hand at installation ([Deploying](deployment.md#5-checks-before-the-first-start)). |
 | **No way to compare with the legacy service during a parallel run.** | HAZ-003 | SRS-VER-005: `verify <run> --against <legacy copy>` and `scripts/compare-with-legacy.sh`. | The parallel run itself (site acceptance). |
 

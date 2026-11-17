@@ -18,7 +18,7 @@ ont-offload tui --theme phosphor --log /var/log/ont-offload/ont-offload.log
 ont-offload tui --check                  # print the settings and what can be read, then exit
 ```
 
-It reads the files `watch` keeps in the state folder (`state.json`, `events.jsonl` and its rotation `events.jsonl.1`, `cleanup-reports.jsonl`) and, when given, the daemon's log file. It starts even when the daemon is stopped, the share is gone or the configuration's paths do not exist, because that is when it is most needed; it then shows **NO DATA** and why.
+It reads the files `watch` keeps in the state folder (`state.json`, `events.jsonl` and its rotation `events.jsonl.1` (older segments in `events/` are for reports, not the dashboard), `cleanup-reports.jsonl`) and, when given, the daemon's log file. It starts even when the daemon is stopped, the share is gone or the configuration's paths do not exist, because that is when it is most needed; it then shows **NO DATA** and why.
 
 ### Settings and where they come from
 

@@ -45,6 +45,7 @@ impl Env {
                  [transfer]\nmin_free = \"1MB\"\nsettle = \"1s\"\nsettle_after_complete = \"2s\"\n\
                  [bandwidth]\nworkers = 3\nrate_limit = \"200MB/s\"\n\
                  [outage]\nsource_free_alert = \"0B\"\n\
+                 [state]\nfree_alert = \"0B\"\n\
                  [source]\nroot = {:?}\n",
                 share.path().to_str().expect("utf8"),
                 dir.path().join("state").to_str().expect("utf8"),

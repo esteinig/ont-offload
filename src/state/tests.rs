@@ -225,6 +225,43 @@ fn events_are_schema_valid_and_rotate_by_size() {
     assert_eq!(w2.events_size, cur.len() as u64);
 }
 
+/// Verifies: SRS-LOG-006, SRS-STATE-002
+#[test]
+fn rotated_events_are_archived_and_never_lost() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = StateWriter::new(&RealFs, dir.path(), Duration::from_secs(2), 4096, None);
+    for i in 0..300 {
+        w.event(
+            &RealFs,
+            Kind::FileCommitted,
+            log::Level::Info,
+            Some("exp/s/run"),
+            Some(&format!("pod5/f{i}.pod5")),
+            "committed",
+            json!({"size": i}),
+        );
+    }
+    let files = event_files(&RealFs, dir.path());
+    assert!(files.len() > 3, "several segments: {files:?}");
+    assert!(files[0].starts_with(dir.path().join(EVENTS_ARCHIVE)));
+    assert!(files[files.len() - 1].ends_with(EVENTS_FILE));
+    // Every event, once and in order, across the archive, .1 and the stream.
+    let seqs: Vec<u64> = files
+        .iter()
+        .flat_map(|f| {
+            std::fs::read_to_string(f)
+                .unwrap()
+                .lines()
+                .map(|l| serde_json::from_str::<Event>(l).unwrap().seq)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_eq!(seqs, (1..=300).collect::<Vec<_>>());
+    // Two segments starting in the same second get distinct names.
+    let names: std::collections::BTreeSet<_> = files.iter().collect();
+    assert_eq!(names.len(), files.len());
+}
+
 /// Verifies: SRS-STATE-001
 #[test]
 fn snapshot_is_replaced_atomically_and_only_when_due() {

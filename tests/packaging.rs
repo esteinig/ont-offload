@@ -72,6 +72,26 @@ fn the_log_is_rotated_by_renaming_with_private_mode() {
     );
 }
 
+/// Verifies: SRS-LOG-006
+#[test]
+fn rotated_logs_are_never_removed() {
+    let conf = read("packaging/ont-offload.logrotate");
+    let lines: Vec<&str> = conf
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.starts_with('#'))
+        .collect();
+    assert!(lines.contains(&"rotate -1"), "{conf}");
+    for forbidden in ["maxage", "compress", "shred", "mail"] {
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.split_whitespace().next() == Some(forbidden)),
+            "{forbidden} in {conf}"
+        );
+    }
+}
+
 /// Verifies: SRS-DEP-001, SRS-VER-005, SRS-TUI-009
 #[test]
 fn shell_scripts_parse() {

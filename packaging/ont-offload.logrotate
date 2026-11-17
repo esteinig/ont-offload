@@ -2,14 +2,19 @@
 # /etc/logrotate.d/ont-offload. The daemon reopens its log by name within a
 # second of a rotation, so no signal and no copytruncate are needed;
 # copytruncate would lose lines and confuse the dashboard's log pane.
+#
+# Old logs are never removed (rotate -1) and stay uncompressed: they are the
+# record for a clinical lookback (ont-offload report status). Each rotated
+# file carries its date. state.free_alert warns before the disk fills.
 /var/log/ont-offload/*.log {
     weekly
     maxsize 100M
-    rotate 12
+    rotate -1
+    dateext
+    dateformat -%Y%m%d-%s
+    nocompress
     missingok
     notifempty
-    compress
-    delaycompress
     create 0640 ont-offload ont-offload
     su ont-offload ont-offload
 }

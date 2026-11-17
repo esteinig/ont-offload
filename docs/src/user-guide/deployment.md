@@ -72,7 +72,7 @@ sudo install -m 0644 packaging/ont-offload.service /etc/systemd/system/
 sudo install -m 0644 packaging/tui.env /etc/ont-offload/tui.env
 ```
 
-Set `logging.file = "/var/log/ont-offload/ont-offload.log"`. The daemon reopens the file by name within a second after logrotate renames it, so no signal or `copytruncate` is needed; logrotate keeps 12 compressed files, rotated weekly or at 100 MB.
+Set `logging.file = "/var/log/ont-offload/ont-offload.log"`. The daemon reopens the file by name within a second after logrotate renames it, so no signal or `copytruncate` is needed; logrotate rotates weekly or at 100 MB and never removes or compresses an old file (`rotate -1`), so the logs stay available for a clinical lookback; `state.free_alert` warns before the disk fills.
 
 ## 5. Checks before the first start
 

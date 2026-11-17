@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Live state (SWI-STATE): `state.json`, a snapshot rewritten atomically
 //! every `state.interval`; `events.jsonl`, one line per state change,
-//! rotated at `state.events_max_size`; and `notify_command`, run for every
+//! rotated to `events.jsonl.1` at `state.events_max_size`, the previous
+//! `events.jsonl.1` moving into the never-pruned archive `events/`; and
+//! `notify_command`, run for every
 //! event that needs a person. The formats are described by the JSON
 //! Schemas in `schema/` (`state-v1.json`, `event-v1.json`).
 
@@ -19,6 +21,8 @@ use crate::logging::escape_control;
 pub const STATE_FILE: &str = "state.json";
 /// Event stream file name in `state_dir`.
 pub const EVENTS_FILE: &str = "events.jsonl";
+/// Archive folder in `state_dir` for rotated event segments, never pruned.
+pub const EVENTS_ARCHIVE: &str = "events";
 /// `schema` value of a snapshot.
 pub const STATE_SCHEMA: &str = "ont-offload/state/v1";
 /// `schema` value of an event.
@@ -354,11 +358,16 @@ pub enum Kind {
     DeletionRefused,
     /// Deleting a source run stopped on an error; it resumes next pass.
     DeletionStopped,
+    /// Free space where the records are kept (`state_dir`, the log file)
+    /// fell below `state.free_alert`.
+    RecordsSpaceLow,
+    /// Free space for the records is above `state.free_alert` again.
+    RecordsSpaceOk,
 }
 
 impl Kind {
     /// Every kind, in the order of the schema.
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 32] = [
         Self::Started,
         Self::DestinationOk,
         Self::RunDiscovered,
@@ -389,6 +398,8 @@ impl Kind {
         Self::DeletionDryRun,
         Self::DeletionRefused,
         Self::DeletionStopped,
+        Self::RecordsSpaceLow,
+        Self::RecordsSpaceOk,
     ];
 
     /// Events that need a person: `notify_command` runs for these.
@@ -413,6 +424,7 @@ impl Kind {
                 | Self::SourceSpaceLow
                 | Self::DeletionRefused
                 | Self::DeletionStopped
+                | Self::RecordsSpaceLow
         )
     }
 
@@ -450,6 +462,89 @@ pub struct Event {
     pub message: String,
     /// Kind-specific details.
     pub data: serde_json::Value,
+}
+
+/// Rotate the event stream without losing a line: the previous
+/// `events.jsonl.1` moves into `events/` under the time of its first event,
+/// then `events.jsonl` becomes `events.jsonl.1` (the name the dashboard
+/// follows). Nothing in the archive is ever removed.
+///
+/// Implements: SRS-STATE-002, SRS-LOG-006
+///
+/// # Errors
+/// The archive folder cannot be created or a rename fails; the stream then
+/// keeps growing in `events.jsonl` and nothing is lost.
+pub fn rotate_events(fs: &dyn Fs, dir: &Path) -> std::io::Result<()> {
+    let current = dir.join(EVENTS_FILE);
+    let previous = dir.join(format!("{EVENTS_FILE}.1"));
+    if fs.metadata(&previous).is_ok() {
+        let archive = dir.join(EVENTS_ARCHIVE);
+        fs.create_dir_all(&archive)?;
+        let stamp = first_event_stamp(fs, &previous).unwrap_or_else(|| {
+            crate::journal::now_rfc3339()
+                .chars()
+                .filter(char::is_ascii_alphanumeric)
+                .collect()
+        });
+        let mut target = archive.join(format!("events-{stamp}.jsonl"));
+        let mut n = 2;
+        while fs.metadata(&target).is_ok() {
+            // `_` sorts after `.`, so name order stays time order.
+            target = archive.join(format!("events-{stamp}_{n:04}.jsonl"));
+            n += 1;
+        }
+        fs.rename(&previous, &target)?;
+    }
+    fs.rename(&current, &previous)
+}
+
+/// `20261117T081500Z` from the `ts` of the first event in a segment.
+fn first_event_stamp(fs: &dyn Fs, path: &Path) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+    let mut line = String::new();
+    BufReader::new(fs.open_read(path).ok()?)
+        .read_line(&mut line)
+        .ok()?;
+    let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    let stamp: String = v
+        .get("ts")?
+        .as_str()?
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    (!stamp.is_empty()).then_some(stamp)
+}
+
+/// Every event file in `state_dir`, oldest first: the archive in name
+/// order, then `events.jsonl.1`, then `events.jsonl`.
+///
+/// Implements: SRS-LOG-006
+#[must_use]
+pub fn event_files(fs: &dyn Fs, dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = fs
+        .read_dir(&dir.join(EVENTS_ARCHIVE))
+        .map(|entries| {
+            entries
+                .into_iter()
+                .map(|e| e.name.to_string_lossy().into_owned())
+                .filter(|n| {
+                    n.starts_with("events-")
+                        && Path::new(n).extension().is_some_and(|e| e == "jsonl")
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+        .into_iter()
+        .map(|n| dir.join(EVENTS_ARCHIVE).join(n))
+        .collect();
+    out.sort();
+    for name in [format!("{EVENTS_FILE}.1"), EVENTS_FILE.to_owned()] {
+        let p = dir.join(name);
+        if fs.metadata(&p).is_ok() {
+            out.push(p);
+        }
+    }
+    out
 }
 
 /// Writes `state.json` and `events.jsonl` and runs `notify_command`.
@@ -524,7 +619,7 @@ impl StateWriter {
         line.push('\n');
         let path = self.dir.join(EVENTS_FILE);
         if self.events_size + line.len() as u64 > self.events_max_size && self.events_size > 0 {
-            match fs.rename(&path, &self.dir.join(format!("{EVENTS_FILE}.1"))) {
+            match rotate_events(fs, &self.dir) {
                 Ok(()) => self.events_size = 0,
                 Err(e) => log::warn!("cannot rotate {EVENTS_FILE}: {e}"),
             }
