@@ -1,0 +1,13 @@
+id = "SRS-RATE-002"
+type = "requirement"
+title = "Rate limit against network speed"
+status = "draft"
+release = "v0.1"
+text = """
+When network_speed is set, refuses to start if rate_limit exceeds it and warns if rate_limit is above 90% of it; warns when rate_limit is unlimited.
+"""
+verification = "Unit"
+
+[links]
+allocated_to = ["SWI-CONFIG"]
+mitigates = []

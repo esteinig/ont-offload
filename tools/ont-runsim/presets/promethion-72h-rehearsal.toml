@@ -1,0 +1,26 @@
+# The promethion-72h run compressed into one wall-clock hour at 1% of full
+# size (about 13 GB): the same folders, file names, batch rhythm and file
+# counts as the full run, for rehearsing an offload end to end.
+seed = 72
+hours = 72.0
+speed = 72.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 0.01
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "1.4GB"
+fastq_pass_batch = "0B"
+fastq_fail_batch = "0B"
+bam_pass_batch = "110MB"
+bam_fail_batch = "15MB"
+barcodes = 0
+
+[[runs]]
+experiment = "runsim_promethion_72h"
+sample = "sample01"
+position = "1A"

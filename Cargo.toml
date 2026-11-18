@@ -54,13 +54,20 @@ path = "src/main.rs"
 [lints]
 workspace = true
 
+[features]
+# Builds the FaultyFs fault-injection filesystem outside unit tests. Never enable for production builds.
+fault-injection = []
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
 fern = "0.7"
+globset = { version = "0.4", default-features = false }
 humantime = "2"
 log = "0.4"
+serde = { version = "1", features = ["derive"] }
 thiserror = "2"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 
 [dev-dependencies]
 assert_cmd = "2"

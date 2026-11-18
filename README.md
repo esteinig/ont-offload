@@ -6,7 +6,7 @@ Verified offload of Oxford Nanopore sequencing runs (live or completed) from a s
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](https://esteinig.github.io/ont-offload)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-> **Status: v0.1 scaffold.** The CLI, logging, exit codes, tooling and compliance register are in place. Commands report the release in which they are planned; see the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
+> **Status: v0.1.** Configuration validation (`check-config`), the filesystem layer with fault injection, and the `ont-runsim` run simulator are in place. Copying starts in v0.2; other commands report the release in which they are planned. See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
 
 ## What it does
 

@@ -7,6 +7,7 @@
 - [Installation](user-guide/installation.md)
 - [Usage](user-guide/usage.md)
 - [Configuration](user-guide/configuration.md)
+- [Run simulator](user-guide/simulator.md)
 
 # Developer guide
 

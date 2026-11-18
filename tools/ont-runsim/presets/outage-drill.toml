@@ -1,0 +1,23 @@
+# Six simulated hours in one hour of steady output, for pulling the network
+# cable or unmounting the share while ont-offload is running. Late files after
+# the final summary exercise the completion settle time.
+seed = 6
+hours = 6.0
+speed = 6.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 0.1
+
+[synthetic]
+batch_every = "5m"
+
+[[runs]]
+experiment = "runsim_outage"
+sample = "sample01"
+position = "1A"
+
+[faults]
+late_files = 2

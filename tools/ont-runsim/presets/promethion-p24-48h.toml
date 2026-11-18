@@ -1,0 +1,46 @@
+# A busy PromethION: four flow cells started over the first six hours, each
+# sequencing for 48 hours in real time at full scale with pod5 and BAM. Peak
+# output is about 75 GB per hour, roughly 3.5 TB in total. Needs that much free
+# space on the sequencer plus keep_free; use it to size workers and rate_limit
+# against the network link.
+seed = 2448
+hours = 48.0
+speed = 1.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 1.0
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "1.4GB"
+fastq_pass_batch = "0B"
+fastq_fail_batch = "0B"
+bam_pass_batch = "110MB"
+bam_fail_batch = "15MB"
+barcodes = 0
+
+[[runs]]
+experiment = "runsim_p24"
+sample = "sample01"
+position = "1A"
+
+[[runs]]
+experiment = "runsim_p24"
+sample = "sample02"
+position = "1B"
+start_after = "1h"
+
+[[runs]]
+experiment = "runsim_p24"
+sample = "sample03"
+position = "2A"
+start_after = "2h"
+
+[[runs]]
+experiment = "runsim_p24"
+sample = "sample04"
+position = "3C"
+start_after = "6h"

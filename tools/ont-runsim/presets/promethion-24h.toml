@@ -1,0 +1,33 @@
+# Two PromethION flow cells for 24 hours in real time at full scale, with
+# barcoded FASTQ output. About 17 GB of pod5 per flow cell per hour, roughly
+# 0.45 TB per flow cell in total. keep_free stops the simulation before the
+# disk fills.
+seed = 24
+hours = 24.0
+speed = 1.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 1.0
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "1.4GB"
+fastq_pass_batch = "100MB"
+fastq_fail_batch = "12MB"
+bam_pass_batch = "0B"
+bam_fail_batch = "0B"
+barcodes = 12
+
+[[runs]]
+experiment = "runsim_promethion"
+sample = "pool_a"
+position = "1A"
+
+[[runs]]
+experiment = "runsim_promethion"
+sample = "pool_b"
+position = "2A"
+start_after = "30m"

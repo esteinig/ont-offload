@@ -1,0 +1,27 @@
+# One PromethION flow cell, 72 hours in real time at full scale, 24 barcodes,
+# with pod5, BAM and FASTQ output. Many small files per batch (about 100), so
+# this tests per-file overhead on the share as much as throughput. Roughly
+# 1.4 TB and 87,000 files in total.
+seed = 7224
+hours = 72.0
+speed = 1.0
+content = "fake"
+timeline = "synthetic"
+
+[fake]
+fill = "random"
+size_scale = 1.0
+
+[synthetic]
+batch_every = "5m"
+pod5_batch = "1.4GB"
+fastq_pass_batch = "100MB"
+fastq_fail_batch = "12MB"
+bam_pass_batch = "110MB"
+bam_fail_batch = "15MB"
+barcodes = 24
+
+[[runs]]
+experiment = "runsim_promethion_barcoded"
+sample = "pool01"
+position = "1A"

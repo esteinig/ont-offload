@@ -74,7 +74,8 @@ impl From<LogLevel> for log::LevelFilter {
 }
 
 /// Log line formats.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LogFormat {
     /// Human-readable text.
     Text,
@@ -142,7 +143,8 @@ impl Command {
     #[must_use]
     pub fn planned(&self) -> &'static str {
         match self {
-            Self::Run { .. } | Self::Verify { .. } | Self::CheckConfig => "v0.2",
+            Self::CheckConfig => "v0.1",
+            Self::Run { .. } | Self::Verify { .. } => "v0.2",
             Self::Watch => "v0.3",
             Self::Status { .. } | Self::Bench => "v0.4",
             Self::Cleanup { .. } => "v0.5",

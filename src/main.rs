@@ -25,7 +25,7 @@ fn main() -> ExitCode {
         env!("CARGO_PKG_VERSION"),
         cli.command.name()
     );
-    match ont_offload::execute(&cli.command) {
+    match ont_offload::execute(&cli) {
         Ok(()) => ExitCode::from(exit::OK),
         Err(e) => {
             log::error!("{e}");
