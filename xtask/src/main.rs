@@ -10,6 +10,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+mod trace;
+
 const USAGE: &str = "\
 cargo xtask <task> [options]
 
@@ -20,7 +22,9 @@ tasks:
   coverage                     llvm-cov lcov report (lcov.info)
   deny                         cargo-deny advisories, licences, bans, sources
   sbom                         CycloneDX SBOM (sbom.cdx.json)
-  trace [--strict] [--gate G]  medtrace ingest JUnit, matrix, gate (pr|release)
+  trace [--strict] [--gate G]  medtrace ingest JUnit, matrix, gate (pr|release);
+                               without medtrace: built-in check and matrix
+  trace --builtin [--results]  built-in check only (--results runs cargo test)
   soup [--write]               SOUP items from Cargo.lock (medtrace)
   check-commits [RANGE]        Conventional Commits and Refs: trailers (cog + medtrace)
   set-version <X.Y.Z>          set the workspace version
@@ -150,12 +154,58 @@ fn lint() -> Res {
     ])
 }
 
+/// Built-in traceability check: tags, register links, milestone coverage,
+/// and with `results` the outcome of `cargo test`. Writes
+/// `target/trace/matrix.md`.
+fn builtin_trace(results: bool) -> Res {
+    let outcomes = if results {
+        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+        eprintln!("$ {cargo} test --workspace --no-fail-fast");
+        let out = Command::new(&cargo)
+            .args(["test", "--workspace", "--no-fail-fast"])
+            .current_dir(root())
+            .output()
+            .map_err(|e| format!("cannot run cargo test: {e}"))?;
+        Some(trace::parse_test_output(&String::from_utf8_lossy(
+            &out.stdout,
+        )))
+    } else {
+        None
+    };
+    let rep = trace::check(&root(), trace::MILESTONE, outcomes.as_ref());
+    let dir = root().join("target").join("trace");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let matrix = dir.join("matrix.md");
+    std::fs::write(&matrix, &rep.matrix).map_err(|e| e.to_string())?;
+    let (reqs, items, hazards, tests, tags) = rep.counts;
+    eprintln!(
+        "trace: {reqs} requirements, {items} software items, {hazards} hazards, {tests} tests, {tags} tags; milestone {}",
+        trace::MILESTONE
+    );
+    for w in &rep.warnings {
+        eprintln!("trace: warning: {w}");
+    }
+    for e in &rep.errors {
+        eprintln!("trace: error: {e}");
+    }
+    eprintln!("trace: matrix written to {}", matrix.display());
+    if rep.ok() {
+        Ok(())
+    } else {
+        Err(format!("{} traceability error(s)", rep.errors.len()))
+    }
+}
+
 fn trace(args: &[&str]) -> Res {
     let m = medtrace();
+    if args.contains(&"--builtin") {
+        return builtin_trace(args.contains(&"--results"));
+    }
     if !has(&m, &["--version"]) {
-        return Err(format!(
-            "medtrace not found (set MEDTRACE or add `{m}` to PATH)"
-        ));
+        eprintln!(
+            "xtask: medtrace not found (set MEDTRACE or add `{m}` to PATH); using the built-in check"
+        );
+        return builtin_trace(true);
     }
     let gate = args
         .iter()

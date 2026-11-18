@@ -4,10 +4,10 @@ title = "Guard before commit"
 status = "draft"
 release = "v0.2"
 text = """
-Re-checks the guard before each commit and stops all writes within one chunk when it fails.
+Re-checks the sentinel after every chunk and the full guard before each commit (rename), and stops all writes within one chunk when it fails.
 """
 verification = "Fault test: sentinel removed mid-copy"
 
 [links]
-allocated_to = ["SWI-GUARD", "SWI-SCHED"]
+allocated_to = ["SWI-GUARD", "SWI-COPY", "SWI-SCHED"]
 mitigates = ["HAZ-001"]

@@ -3,11 +3,13 @@
 dest_root = "/mnt/nas/ont"
 target_id = "CHANGE-ME"          # must match dest_root/.ont-offload-target
 state_dir = "/var/lib/ont-offload"
+# Top folder on the share: "experiment" (exp/sample/run), "sample" (sample/run) or "run".
+dest_starts_at = "experiment"
 
 [source]
 root = "/data"
 layout = "minknow"               # or "any-depth"
-run_markers = ["sample_sheet_*.csv"]
+run_markers = ["sample_sheet_*.csv"]   # a pattern ending in "/" matches a folder, e.g. "pod5/"
 complete_markers = ["final_summary_*.txt"]
 ignore = ["lost+found", "**/.*", "ont-runsim"]
 

@@ -95,11 +95,21 @@ pub trait FsFile: Write + Send {
     /// # Errors
     /// Returns the operating system error.
     fn sync_data(&mut self) -> io::Result<()>;
+
+    /// Set the file's modification time.
+    ///
+    /// # Errors
+    /// Returns the operating system error.
+    fn set_modified(&mut self, time: SystemTime) -> io::Result<()>;
 }
 
 impl FsFile for fs::File {
     fn sync_data(&mut self) -> io::Result<()> {
         fs::File::sync_data(self)
+    }
+
+    fn set_modified(&mut self, time: SystemTime) -> io::Result<()> {
+        fs::File::set_modified(self, time)
     }
 }
 
@@ -176,6 +186,18 @@ pub trait Fs: Send + Sync {
     /// # Errors
     /// Returns the operating system error.
     fn sync_dir(&self, path: &Path) -> io::Result<()>;
+
+    /// Append bytes to a file (created if missing) and flush them to stable storage.
+    ///
+    /// # Errors
+    /// Returns the operating system error.
+    fn append_sync(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+
+    /// Set permission bits (Unix; no-op elsewhere).
+    ///
+    /// # Errors
+    /// Returns the operating system error.
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()>;
 }
 
 /// The production filesystem: plain `std::fs`.
@@ -253,6 +275,26 @@ impl Fs for RealFs {
 
     #[cfg(not(unix))]
     fn sync_dir(&self, _path: &Path) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn append_sync(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+        f.write_all(data)?;
+        f.sync_data()
+    }
+
+    #[cfg(unix)]
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(mode))
+    }
+
+    #[cfg(not(unix))]
+    fn set_mode(&self, _path: &Path, _mode: u32) -> io::Result<()> {
         Ok(())
     }
 }

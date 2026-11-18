@@ -9,5 +9,5 @@ verify writes VERIFIED.json with the manifest digest, file count, bytes, host an
 verification = "Integration: clean run and one corrupted file"
 
 [links]
-allocated_to = ["SWI-JOURNAL"]
+allocated_to = ["SWI-JOURNAL", "SWI-CLI"]
 mitigates = ["HAZ-002", "HAZ-009"]

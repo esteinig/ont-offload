@@ -6,12 +6,12 @@ Verified offload of Oxford Nanopore sequencing runs (live or completed) from a s
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](https://esteinig.github.io/ont-offload)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-> **Status: v0.1.** Configuration validation (`check-config`), the filesystem layer with fault injection, and the `ont-runsim` run simulator are in place. Copying starts in v0.2; other commands report the release in which they are planned. See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
+> **Status: v0.2 (in development).** Completed runs can be copied with `ont-offload run` and checked with `ont-offload verify`; `check-config` lists detected runs and their destinations. Live runs (`watch`), parallel workers and the rate limit come in v0.3; other commands report the release in which they are planned. See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
 
 ## What it does
 
 - Copies each run with its original directory structure, from the MinKNOW layout under `/data`, to an NFS or SMB share.
-- Hashes every file with SHA-256 while copying, commits by atomic rename, and writes a `sha256sum -c` compatible manifest per run, then `COMPLETE`.
+- Hashes every file with SHA-256 while copying, commits by atomic rename, and writes a `sha256sum -c` compatible manifest and `run.json` per run, then `COMPLETE`.
 - Refuses to write unless the share proves it is mounted (sentinel file, filesystem type, device id), and re-checks before every file.
 - Pauses through network outages of any length and resumes on its own.
 - Caps total bandwidth with one plain `rate_limit` across parallel workers.
@@ -26,6 +26,8 @@ The workspace also contains `ont-runsim`, a test tool that writes simulated MinK
 cargo install --locked --git https://github.com/esteinig/ont-offload ont-offload
 ont-offload --help
 ont-offload check-config --config /etc/ont-offload/config.toml
+ont-offload run --config /etc/ont-offload/config.toml /data/<experiment>/<sample>/<run>
+ont-offload verify /mnt/nas/ont/<experiment>/<sample>/<run>
 ```
 
 An example configuration is in [`packaging/ont-offload.example.toml`](packaging/ont-offload.example.toml) and a systemd unit in [`packaging/ont-offload.service`](packaging/ont-offload.service).
@@ -47,7 +49,7 @@ An example configuration is in [`packaging/ont-offload.example.toml`](packaging/
 ```sh
 cargo xtask test      # unit, integration, doc tests
 cargo xtask lint      # rustfmt + clippy -D warnings
-cargo xtask trace     # medtrace traceability (needs medtrace)
+cargo xtask trace     # traceability (medtrace, or the built-in check without it)
 cargo xtask ci        # everything CI runs
 ```
 

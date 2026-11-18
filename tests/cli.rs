@@ -136,7 +136,7 @@ fn check_config_rejects_unknown_key() {
         .stderr(predicate::str::contains("unknown field `bwlimit`"));
 }
 
-/// Verifies: SRS-CFG-004
+/// Verifies: SRS-CFG-004, SRS-GRD-001
 ///
 /// Needs a second filesystem to stand in for the share; uses `/dev/shm`
 /// when it is on a different device than the temp dir, otherwise skips.
@@ -152,18 +152,23 @@ fn check_config_accepts_valid_config_and_prints_summary() {
     if dev(dir.path()) == dev(share.path()) {
         return;
     }
+    std::fs::write(share.path().join(".ont-offload-target"), "lab-nas-01\n").expect("sentinel");
     let cfg = write_config(
         dir.path(),
         share.path(),
-        "[bandwidth]\nworkers = 4\nrate_limit = \"100MB/s\"\nnetwork_speed = \"1Gbit/s\"",
+        "[bandwidth]\nworkers = 4\nrate_limit = \"100MB/s\"\nnetwork_speed = \"1Gbit/s\"\n\
+         [guard]\nallowed_fstypes = [\"tmpfs\"]",
     );
     bin()
         .args(["check-config", "--config", cfg.to_str().expect("utf8")])
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("configuration OK").and(predicate::str::contains(
-                "4 workers, total 100 MB/s (about 25 MB/s per worker), 80% of the 1 Gbit/s link",
-            )),
+            predicate::str::contains("configuration OK")
+                .and(predicate::str::contains(
+                    "4 workers, total 100 MB/s (about 25 MB/s per worker), 80% of the 1 Gbit/s link",
+                ))
+                .and(predicate::str::contains("runs detected: 0"))
+                .and(predicate::str::contains("destination guard OK")),
         );
 }

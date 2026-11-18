@@ -4,7 +4,7 @@ title = "Re-resolved destination"
 status = "draft"
 release = "v0.2"
 text = """
-Re-resolves the real path of dest_root before each commit and pauses writes if it differs from the path recorded at start-up.
+Re-resolves the real path of dest_root before each commit and stops writes if it differs from the path recorded at start-up (v0.2 ends the invocation; from v0.3 the watcher pauses and resumes when the path is right again).
 """
 verification = "Fault test: symlink repointed mid-run"
 

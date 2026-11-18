@@ -4,6 +4,7 @@ ont-offload follows IEC 62304 (edition 1, class B) with medtrace traceability.
 
 - **Register:** `compliance/` holds software items (`SWI-*`), requirements (`SRS-*`), hazards (`HAZ-*`) and SOUP, one TOML file per item.
 - **Tags:** code carries `/// Implements: SRS-...`, tests carry `/// Verifies: SRS-...`; untagged tests are errors.
+- **Without medtrace:** `cargo test` runs a built-in traceability check (tags, register links, milestone coverage), and `cargo xtask trace` falls back to it when medtrace is not installed; see [Testing](testing.md#traceability-without-medtrace).
 - **Commits:** a `Refs:` trailer names the items a commit touches.
 - **Gates:** the PR gate (CI `trace` job) needs tagged, passing tests for the changed items; the release gate (PRs into `main` and the Release workflow) needs every item approved, every requirement verified and SOUP reviewed.
 - **Lifecycle documents:** `medtrace doc build all` renders the software development plan, requirements, architecture, risk file, SOUP list, traceability matrix and release records into the docs site.
