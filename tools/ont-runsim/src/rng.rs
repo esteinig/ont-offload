@@ -59,6 +59,26 @@ impl SplitMix64 {
     }
 }
 
+/// Fill `buf` with the bytes at `offset..offset + buf.len()` of the stream
+/// that [`SplitMix64::fill`] produces from `seed` in one call.
+///
+/// The stream is a pure function of the offset, so a file can be written in
+/// chunks of any size, and its prefix regenerated later, with the same bytes.
+pub fn fill_at(seed: u64, offset: u64, buf: &mut [u8]) {
+    const GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut rng = SplitMix64::new(seed.wrapping_add((offset / 8).wrapping_mul(GAMMA)));
+    #[allow(clippy::cast_possible_truncation)]
+    let mut skip = (offset % 8) as usize;
+    let mut filled = 0;
+    while filled < buf.len() {
+        let v = rng.next_u64().to_le_bytes();
+        let n = (8 - skip).min(buf.len() - filled);
+        buf[filled..filled + n].copy_from_slice(&v[skip..skip + n]);
+        filled += n;
+        skip = 0;
+    }
+}
+
 /// FNV-1a hash of a string, for deriving per-file seeds.
 #[must_use]
 pub fn hash_str(s: &str) -> u64 {
@@ -90,5 +110,18 @@ mod tests {
         }
         assert_eq!(a.hex8().len(), 8);
         assert_ne!(hash_str("a"), hash_str("b"));
+    }
+
+    #[test]
+    fn fill_at_matches_one_fill_whatever_the_chunks() {
+        let mut whole = [0u8; 100];
+        SplitMix64::new(9).fill(&mut whole);
+        let mut pieces = [0u8; 100];
+        let mut off = 0;
+        for n in [3, 1, 13, 8, 30, 45] {
+            fill_at(9, off as u64, &mut pieces[off..off + n]);
+            off += n;
+        }
+        assert_eq!(whole, pieces);
     }
 }

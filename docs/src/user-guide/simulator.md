@@ -21,6 +21,7 @@ ont-runsim clean --out /data/ont-runsim
 | Command | What it does |
 | --- | --- |
 | `run --preset NAME` or `run --scenario FILE` | Writes runs over time. Overrides: `--hours`, `--speed`, `--seed`, `--size-scale`. `--keep-free 500GB` stops when the disk gets full (exit 3). `--dry-run` prints the plan only. |
+| `run --resume` | Continues the stopped simulation in `--out` where it stopped (see [Resuming](#resuming-a-stopped-simulation)). `--speed` may change the pace; `--keep-free` and `-q` apply as usual. |
 | `presets` | Lists the built-in presets (see below). |
 | `profile RUN -o profile.json` | Records the timeline of a finished real run from file metadata only (no content is read). |
 | `status [--json]` | Progress of the simulation in an output folder. |
@@ -90,4 +91,26 @@ Batch output goes to `pod5/`, `fastq_pass/`, `fastq_fail/`, `bam_pass/` and `bam
 
 ## Live state
 
-`<out>/.ont-runsim/status.json` is rewritten atomically about once a second (state, simulated time, files and bytes per run); `<out>/.ont-runsim/events.jsonl` logs run start, completion, aborts and faults. Manifests are in `<out>/.ont-runsim/manifests/<run folder>.sha256` and list closed files only while a run is live.
+`<out>/.ont-runsim/resume.json` is written once at the start: the scenario text with the command-line overrides, the time the plan was built for, the tool version and a fingerprint of the profile and replay files. `<out>/.ont-runsim/status.json` is rewritten atomically about once a second (state, simulated time, files and bytes per run); `<out>/.ont-runsim/events.jsonl` logs run start, completion, aborts, faults and resumes. Manifests are in `<out>/.ont-runsim/manifests/<run folder>.sha256` and list closed files only while a run is live.
+
+## Resuming a stopped simulation
+
+A simulation stops when its terminal closes or crashes, when it is killed or interrupted, when the machine restarts, or when free space falls below `--keep-free`. `ont-runsim status` then shows `stopped (process gone)` (or `stopped` with the reason) and how to continue:
+
+```sh
+ont-runsim run --resume --out /data/ont-runsim
+ont-runsim run --resume --out /data/ont-runsim --speed 600   # continue at another pace
+```
+
+The plan is rebuilt from `resume.json`, so the run folders, file names, sizes, timing, content and faults are the same as they would have been. Simulated time continues from the last time in `status.json`: the time the simulator was stopped does not count, so the runs look paused, as a paused MinKNOW run would. Each run is picked up from what is on disk:
+
+- runs that completed or aborted stay as they are;
+- files at their final size and listed in the manifest are taken as closed (they are not read again);
+- files that were still growing, and closed files missing from the manifest, are read back and compared with the bytes they should hold; the matching part is kept, anything after it (for example a tail torn by a power cut) is cut off with a `resume_truncated` event, and writing continues from there;
+- files not created yet, and runs not started yet, follow the plan.
+
+A resumed run ends with the same bytes and the same manifest as a run that was never stopped. The resume is logged as `simulation_resumed` with the simulated time it continued from; `status.json` keeps the original start time.
+
+`--resume` refuses (exit 2) when there is nothing to resume (no `resume.json`, for example a folder written before `--resume` existed), while the simulation is still running, after it finished, when it was started by another ont-runsim version, or when the scenario's profile or replay files changed. Scenario and preset options (`--scenario`, `--preset`, `--hours`, `--seed`, `--size-scale`, `--dry-run`) cannot be combined with `--resume`. Starting a new `run` in the same folder replaces `resume.json`, so only the latest simulation there can be resumed.
+
+A long stop is visible to ont-offload as runs that stopped growing; how it treats them (for example stall warnings) is part of what such a test shows.

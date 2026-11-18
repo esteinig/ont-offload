@@ -5,7 +5,7 @@
 //! [`Engine::advance_to`] is clock-free so tests can drive it on a fake
 //! clock; [`simulate`] drives it on the wall clock at the scenario speed.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -15,8 +15,8 @@ use std::time::{Duration, Instant, SystemTime};
 use sha2::{Digest, Sha256};
 
 use crate::plan::{Content, RunPlan};
-use crate::rng::SplitMix64;
-use crate::scenario::Scenario;
+use crate::resume::Session;
+use crate::rng;
 use crate::status::{self, EventLog, RunStatus, Status};
 use crate::units::{bytes, hms};
 use crate::{Error, Result, STATE_DIR, io_err, write_atomic};
@@ -25,7 +25,7 @@ const CHUNK: usize = 1 << 20;
 
 /// Produces the bytes of one file, sequentially.
 enum Gen {
-    Random(SplitMix64, bool),
+    Random(u64, bool),
     Zero,
     Text(Arc<Vec<u8>>),
     Replay(File, u64, PathBuf),
@@ -34,7 +34,7 @@ enum Gen {
 impl Gen {
     fn new(content: &Content) -> Result<Self> {
         Ok(match content {
-            Content::Random { seed, printable } => Self::Random(SplitMix64::new(*seed), *printable),
+            Content::Random { seed, printable } => Self::Random(*seed, *printable),
             Content::Zero => Self::Zero,
             Content::Text(t) => Self::Text(Arc::clone(t)),
             Content::Replay(p) => {
@@ -45,13 +45,14 @@ impl Gen {
         })
     }
 
-    /// Fill `buf` with the bytes at `offset..offset + buf.len()`; calls are sequential.
+    /// Fill `buf` with the bytes at `offset..offset + buf.len()`. The bytes
+    /// depend only on the offset, not on how the file is cut into chunks.
     fn fill(&mut self, offset: u64, buf: &mut [u8]) -> Result<()> {
         const HEX: &[u8; 16] = b"0123456789abcdef";
         match self {
-            Self::Random(rng, false) => rng.fill(buf),
-            Self::Random(rng, true) => {
-                rng.fill(buf);
+            Self::Random(seed, false) => rng::fill_at(*seed, offset, buf),
+            Self::Random(seed, true) => {
+                rng::fill_at(*seed, offset, buf);
                 for (i, b) in buf.iter_mut().enumerate() {
                     *b = if (offset + i as u64) % 81 == 80 {
                         b'\n'
@@ -178,6 +179,171 @@ fn hex(d: &[u8]) -> String {
         let _ = write!(s, "{b:02x}");
         s
     })
+}
+
+/// Write a run's manifest if it changed (`sha256sum -c` format, relative to the run folder).
+fn write_manifest(dir: &Path, r: &mut RunState) -> Result<()> {
+    if !r.dirty {
+        return Ok(());
+    }
+    let mut text = String::new();
+    for (path, digest) in &r.manifest {
+        text.push_str(digest);
+        text.push_str("  ");
+        text.push_str(path);
+        text.push('\n');
+    }
+    write_atomic(
+        &dir.join(format!("{}.sha256", r.plan.id.folder_name())),
+        text.as_bytes(),
+    )?;
+    r.dirty = false;
+    Ok(())
+}
+
+/// Read a manifest written by [`write_manifest`]; a missing one is empty.
+fn read_manifest(path: &Path) -> Result<BTreeMap<String, String>> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
+        Err(e) => return Err(io_err("read", path)(e)),
+    };
+    Ok(text
+        .lines()
+        .filter_map(|l| l.split_once("  "))
+        .map(|(d, p)| (p.to_owned(), d.to_owned()))
+        .collect())
+}
+
+/// Size of a regular file, `None` when it does not exist.
+fn file_len(path: &Path) -> Result<Option<u64>> {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.is_file() => Ok(Some(m.len())),
+        Ok(_) => Err(Error::Refused(format!(
+            "{} should be a file of the simulation",
+            path.display()
+        ))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(io_err("stat", path)(e)),
+    }
+}
+
+/// Reopen a planned file found on disk at `len` bytes: keep the longest
+/// prefix that matches `content`, cut off the rest, and return it
+/// ready to grow from there with the hash of the kept bytes.
+fn reopen(
+    idx: usize,
+    content: &Content,
+    size: u64,
+    path: PathBuf,
+    len: u64,
+    buf: &mut [u8],
+    expect: &mut [u8],
+) -> Result<OpenFile> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .map_err(io_err("open", &path))?;
+    let mut source = Gen::new(content)?;
+    let mut hasher = Sha256::new();
+    let mut kept = 0u64;
+    let limit = len.min(size);
+    while kept < limit {
+        let n = usize::try_from(limit - kept)
+            .unwrap_or(buf.len())
+            .min(buf.len());
+        file.read_exact(&mut buf[..n])
+            .map_err(io_err("read", &path))?;
+        source.fill(kept, &mut expect[..n])?;
+        let same = buf[..n]
+            .iter()
+            .zip(&expect[..n])
+            .take_while(|(a, b)| a == b)
+            .count();
+        hasher.update(&expect[..same]);
+        kept += same as u64;
+        if same < n {
+            break;
+        }
+    }
+    if kept < len {
+        file.set_len(kept).map_err(io_err("truncate", &path))?;
+    }
+    file.seek(SeekFrom::Start(kept))
+        .map_err(io_err("seek", &path))?;
+    Ok(OpenFile {
+        idx,
+        file,
+        path,
+        written: kept,
+        hasher,
+        source,
+    })
+}
+
+/// Pick up a started, unfinished run from its folder (see [`Engine::resume`]).
+fn pick_up(
+    r: &mut RunState,
+    name: &str,
+    events: &[status::Event],
+    buf: &mut [u8],
+    expect: &mut [u8],
+    notes: &mut Vec<(String, String)>,
+) -> Result<()> {
+    r.phase = Phase::Sequencing;
+    for (k, w) in r.plan.rewrites.iter().enumerate() {
+        let rel = &r.plan.files[w.file].rel;
+        let logged = events
+            .iter()
+            .filter(|e| {
+                e.event == "fault_rewrite" && e.run.as_deref() == Some(name) && &e.detail == rel
+            })
+            .count();
+        let before = r.plan.rewrites[..k]
+            .iter()
+            .filter(|x| x.file == w.file)
+            .count();
+        r.rewrites_done[k] = logged > before;
+    }
+    // A file whose rewrite is done holds the rewrite's bytes.
+    let mut content: BTreeMap<usize, Content> = BTreeMap::new();
+    for (k, w) in r.plan.rewrites.iter().enumerate() {
+        if r.rewrites_done[k] {
+            content.insert(
+                w.file,
+                Content::Random {
+                    seed: w.seed,
+                    printable: false,
+                },
+            );
+        }
+    }
+    for idx in 0..r.plan.files.len() {
+        let f = &r.plan.files[idx];
+        let path = r.dir.join(&f.rel);
+        let Some(len) = file_len(&path)? else { break };
+        r.next = idx + 1;
+        if len == f.size && r.manifest.contains_key(&f.rel) {
+            r.files_closed += 1;
+            r.bytes_written += len;
+            continue;
+        }
+        let c = content.get(&idx).unwrap_or(&f.content);
+        let of = reopen(idx, c, f.size, path, len, buf, expect)?;
+        if of.written < len {
+            notes.push((
+                name.to_owned(),
+                format!(
+                    "{}: kept {} of {} bytes, the rest did not match and was cut off",
+                    f.rel, of.written, len
+                ),
+            ));
+        }
+        r.bytes_written += of.written;
+        r.open.push(of);
+    }
+    Ok(())
 }
 
 /// Prepare an output folder: refuse folders the simulator did not create,
@@ -333,6 +499,7 @@ impl Engine {
         clippy::too_many_lines
     )]
     pub fn advance_to(&mut self, t: f64) -> Result<()> {
+        let mdir = status::manifests_dir(&self.out);
         for r in &mut self.runs {
             if matches!(r.phase, Phase::Complete | Phase::Aborted) || t < r.plan.start_s {
                 continue;
@@ -399,15 +566,16 @@ impl Engine {
             }
 
             // Rewrite faults.
-            for (k, w) in r.plan.rewrites.iter().enumerate() {
+            for k in 0..r.plan.rewrites.len() {
+                let w = r.plan.rewrites[k];
                 if r.rewrites_done[k] || w.at_s > limit {
                     continue;
                 }
-                let f = &r.plan.files[w.file];
+                let (rel, size) = (r.plan.files[w.file].rel.clone(), r.plan.files[w.file].size);
                 if r.open.iter().any(|o| o.idx == w.file) || w.file >= r.next {
                     continue;
                 }
-                let path = r.dir.join(&f.rel);
+                let path = r.dir.join(&rel);
                 let file = File::create(&path).map_err(io_err("rewrite", &path))?;
                 let mut of = OpenFile {
                     idx: w.file,
@@ -420,13 +588,15 @@ impl Engine {
                         printable: false,
                     })?,
                 };
-                r.bytes_written += of.write_to(f.size, &mut self.buf)?;
+                r.bytes_written += of.write_to(size, &mut self.buf)?;
                 of.file.sync_data().map_err(io_err("sync", &of.path))?;
-                r.manifest.insert(f.rel.clone(), hex(&of.hasher.finalize()));
+                r.manifest.insert(rel.clone(), hex(&of.hasher.finalize()));
                 r.rewrites_done[k] = true;
                 r.dirty = true;
+                // Manifest first: an event in the log means the manifest has it (resume relies on this).
+                write_manifest(&mdir, r)?;
                 self.events
-                    .emit(w.at_s, "fault_rewrite", Some(&name), &f.rel)?;
+                    .emit(w.at_s, "fault_rewrite", Some(&name), &rel)?;
             }
 
             // Abort fault: leave partial files as they are, record what is on disk.
@@ -438,6 +608,7 @@ impl Engine {
                 }
                 r.phase = Phase::Aborted;
                 r.dirty = true;
+                write_manifest(&mdir, r)?;
                 self.events.emit(
                     t,
                     "run_aborted",
@@ -453,6 +624,7 @@ impl Engine {
             {
                 r.phase = Phase::Complete;
                 r.dirty = true;
+                write_manifest(&mdir, r)?;
                 self.events.emit(
                     t,
                     "run_complete",
@@ -470,21 +642,109 @@ impl Engine {
     /// I/O errors.
     pub fn write_manifests(&mut self) -> Result<()> {
         let dir = status::manifests_dir(&self.out);
-        for r in self.runs.iter_mut().filter(|r| r.dirty) {
-            let mut text = String::new();
-            for (path, digest) in &r.manifest {
-                text.push_str(digest);
-                text.push_str("  ");
-                text.push_str(path);
-                text.push('\n');
-            }
-            write_atomic(
-                &dir.join(format!("{}.sha256", r.plan.id.folder_name())),
-                text.as_bytes(),
-            )?;
-            r.dirty = false;
+        for r in &mut self.runs {
+            write_manifest(&dir, r)?;
         }
         Ok(())
+    }
+
+    /// Rebuild the engine of a stopped simulation from its plan and what is
+    /// on disk, without writing anything new:
+    ///
+    /// - runs with a `run_complete` or `run_aborted` event stay as they are;
+    /// - planned files on disk at their final size and in the manifest are closed;
+    /// - other files on disk (still growing at the stop, or closed but not yet
+    ///   in the manifest) are compared with the bytes they should hold; the
+    ///   matching part is kept, anything after it is cut off, and writing
+    ///   continues from there;
+    /// - rewrite faults with a `fault_rewrite` event are done, and their files
+    ///   are checked against the rewritten bytes (redoing a rewrite that has
+    ///   no event writes the same bytes again).
+    ///
+    /// Returns the engine and, per run, notes on cut-off files.
+    ///
+    /// # Errors
+    /// [`Error::Refused`] when a planned run folder is not in `runs.txt` (the
+    /// plan does not belong to this output folder); I/O errors.
+    pub fn resume(out: &Path, plans: Vec<RunPlan>) -> Result<(Self, Vec<(String, String)>)> {
+        let list = status::runs_list(out);
+        let registered: HashSet<String> = std::fs::read_to_string(&list)
+            .map_err(io_err("read", &list))?
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        let events = status::read_events(out)?;
+        let mdir = status::manifests_dir(out);
+        let mut buf = vec![0; CHUNK];
+        let mut expect = vec![0; CHUNK];
+        let mut notes = Vec::new();
+        let mut runs = Vec::with_capacity(plans.len());
+        for plan in plans {
+            let rel_dir = plan.id.rel_dir();
+            if !registered.contains(&rel_dir.display().to_string()) {
+                return Err(Error::Refused(format!(
+                    "run folder {} of the rebuilt plan is not in {}; resume.json does not belong to this output folder",
+                    rel_dir.display(),
+                    list.display()
+                )));
+            }
+            let name = plan.id.folder_name();
+            let has = |event: &str| {
+                events
+                    .iter()
+                    .any(|e| e.event == event && e.run.as_deref() == Some(name.as_str()))
+            };
+            let (complete, aborted) = (has("run_complete"), has("run_aborted"));
+            let n = plan.rewrites.len();
+            let mut r = RunState {
+                manifest: read_manifest(&mdir.join(format!("{name}.sha256")))?,
+                dir: out.join(&rel_dir),
+                plan,
+                next: 0,
+                open: Vec::new(),
+                rewrites_done: vec![false; n],
+                phase: Phase::Waiting,
+                files_closed: 0,
+                bytes_written: 0,
+                dirty: false,
+            };
+            if complete || aborted {
+                r.phase = if complete {
+                    Phase::Complete
+                } else {
+                    Phase::Aborted
+                };
+                r.next = r.plan.files.len();
+                r.rewrites_done.fill(true);
+                for f in &r.plan.files {
+                    if let Some(len) = file_len(&r.dir.join(&f.rel))? {
+                        if r.manifest.contains_key(&f.rel) {
+                            r.bytes_written += len;
+                            r.files_closed += usize::from(len == f.size);
+                        }
+                    }
+                }
+            } else if r.dir.is_dir() {
+                pick_up(&mut r, &name, &events, &mut buf, &mut expect, &mut notes)?;
+            }
+            runs.push(r);
+        }
+        Ok((
+            Self {
+                out: out.to_owned(),
+                runs,
+                events: EventLog::new(out),
+                buf,
+            },
+            notes,
+        ))
+    }
+
+    /// Files that were growing when the engine was built by [`Engine::resume`]
+    /// (or are growing now).
+    #[must_use]
+    pub fn open_files(&self) -> usize {
+        self.runs.iter().map(|r| r.open.len()).sum()
     }
 
     /// Build a status snapshot.
@@ -575,18 +835,19 @@ pub struct Outcome {
     pub status: Status,
 }
 
-/// Run a scenario on the wall clock.
+/// Run a scenario on the wall clock, keeping `resume.json` so that
+/// [`resume`] can continue it after a stop.
 ///
 /// # Errors
 /// [`Error::Refused`] for an unsafe output folder, [`Error::DiskFull`],
 /// I/O errors. The status file records the reason.
-#[allow(clippy::cast_precision_loss)]
-pub fn simulate(sc: &Scenario, out: &Path, opts: &Options) -> Result<Outcome> {
+pub fn simulate(session: &Session, out: &Path, opts: &Options) -> Result<Outcome> {
     prepare_out(out)?;
-    let plans = crate::plan::build(sc, SystemTime::now())?;
-    let mut engine = Engine::new(out, plans)?;
-    let started = status::now_rfc3339();
-    let total = engine.total_seconds();
+    let sc = session.scenario()?;
+    let mut session = session.clone();
+    let planned = session.stamp(&sc, SystemTime::now())?;
+    let engine = Engine::new(out, crate::plan::build(&sc, planned)?)?;
+    session.write(out)?;
     engine.events().emit(
         0.0,
         "simulation_started",
@@ -594,15 +855,80 @@ pub fn simulate(sc: &Scenario, out: &Path, opts: &Options) -> Result<Outcome> {
         &format!(
             "{} run(s), {} simulated, speed {}x, seed {}",
             engine.runs.len(),
-            hms(total),
+            hms(engine.total_seconds()),
             sc.speed,
             sc.seed
         ),
     )?;
+    drive(engine, out, opts, sc.speed, 0.0, &status::now_rfc3339())
+}
+
+/// Continue a stopped simulation (crash, closed terminal, kill, disk full)
+/// where its status last recorded it. Simulated time stays where it
+/// stopped while nothing ran, so the stop shows as a pause of the runs.
+/// `speed` replaces the scenario's pace from here on.
+///
+/// # Errors
+/// [`Error::Refused`] when there is nothing to resume, the simulation is
+/// still running or finished, or the version or inputs changed;
+/// [`Error::DiskFull`]; I/O errors.
+pub fn resume(out: &Path, speed: Option<f64>, opts: &Options) -> Result<Outcome> {
+    let session = Session::read(out)?;
+    prepare_out(out)?;
+    let sc = session.scenario()?;
+    session.check(&sc)?;
+    let pace = speed.unwrap_or(sc.speed);
+    if !(pace > 0.0 && pace <= 1_000_000.0) {
+        return Err(Error::Scenario(format!(
+            "speed = {pace} must be more than 0 and at most 1000000"
+        )));
+    }
+    let (sim0, started) = match Status::read(out) {
+        Ok(s) if s.state == "finished" => {
+            return Err(Error::Refused(format!(
+                "the simulation in {} has finished; nothing to resume",
+                out.display()
+            )));
+        }
+        Ok(s) => (s.sim_seconds, s.started),
+        Err(_) => (0.0, status::now_rfc3339()),
+    };
+    let plans = crate::plan::build(&sc, session.plan_time())?;
+    let (engine, notes) = Engine::resume(out, plans)?;
+    for (run, note) in &notes {
+        engine
+            .events()
+            .emit(sim0, "resume_truncated", Some(run), note)?;
+    }
+    engine.events().emit(
+        sim0,
+        "simulation_resumed",
+        None,
+        &format!(
+            "at {} of {}, speed {pace}x, {} file(s) were open",
+            hms(sim0),
+            hms(engine.total_seconds()),
+            engine.open_files()
+        ),
+    )?;
+    drive(engine, out, opts, pace, sim0, &started)
+}
+
+/// Drive an engine on the wall clock from simulated second `sim0`.
+#[allow(clippy::cast_precision_loss)]
+fn drive(
+    mut engine: Engine,
+    out: &Path,
+    opts: &Options,
+    speed: f64,
+    sim0: f64,
+    started: &str,
+) -> Result<Outcome> {
+    let total = engine.total_seconds();
     let t0 = Instant::now();
     let mut last_progress = Instant::now();
     loop {
-        let sim = t0.elapsed().as_secs_f64() * sc.speed;
+        let sim = sim0 + t0.elapsed().as_secs_f64() * speed;
         let free = free_bytes(out)?;
         if free < opts.keep_free {
             let err = Error::DiskFull {
@@ -613,19 +939,19 @@ pub fn simulate(sc: &Scenario, out: &Path, opts: &Options) -> Result<Outcome> {
                 .events()
                 .emit(sim, "simulation_stopped", None, &err.to_string())?;
             engine
-                .status("stopped", &started, sc.speed, sim, Some(err.to_string()))
+                .status("stopped", started, speed, sim, Some(err.to_string()))
                 .write(out)?;
             return Err(err);
         }
         if let Err(e) = engine.advance_to(sim) {
             let _ = engine
-                .status("failed", &started, sc.speed, sim, Some(e.to_string()))
+                .status("failed", started, speed, sim, Some(e.to_string()))
                 .write(out);
             return Err(e);
         }
         let done = engine.done();
         let state = if done { "finished" } else { "running" };
-        let snapshot = engine.status(state, &started, sc.speed, sim.min(total), None);
+        let snapshot = engine.status(state, started, speed, sim.min(total), None);
         snapshot.write(out)?;
         if let Some(every) = opts.progress_every {
             if done || last_progress.elapsed() >= every {
@@ -651,7 +977,7 @@ pub fn simulate(sc: &Scenario, out: &Path, opts: &Options) -> Result<Outcome> {
             return Ok(Outcome { status: snapshot });
         }
         let next = engine.next_event_after(sim);
-        let wait = ((next - sim) / sc.speed).clamp(0.02, 1.0);
+        let wait = ((next - sim) / speed).clamp(0.02, 1.0);
         std::thread::sleep(Duration::from_secs_f64(wait));
     }
 }

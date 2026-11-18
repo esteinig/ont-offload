@@ -2,12 +2,13 @@
 //! ont-runsim CLI.
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
 use clap::{ArgGroup, Parser, Subcommand};
 use ont_runsim::engine::{self, Options};
+use ont_runsim::resume::{Overrides, Session};
 use ont_runsim::scenario::Scenario;
 use ont_runsim::status::{self, Status};
 use ont_runsim::units::{bytes, hms, parse_size};
@@ -36,8 +37,8 @@ enum Cmd {
         #[arg(short, long)]
         output: PathBuf,
     },
-    /// Generate runs over time.
-    #[command(group(ArgGroup::new("source").required(true).args(["scenario", "preset"])))]
+    /// Generate runs over time, or continue a stopped simulation with --resume.
+    #[command(group(ArgGroup::new("source").required(true).args(["scenario", "preset", "resume"])))]
     Run {
         /// Scenario file (TOML).
         #[arg(long)]
@@ -48,6 +49,11 @@ enum Cmd {
         /// Output folder (created; must be new, empty or a previous simulator folder).
         #[arg(long, default_value = "/data/ont-runsim")]
         out: PathBuf,
+        /// Continue the stopped simulation in --out where it stopped (after a
+        /// crash, a closed terminal, a kill or a full disk), with the same
+        /// scenario and options; --speed may change the pace.
+        #[arg(long, conflicts_with_all = ["hours", "seed", "size_scale", "dry_run"])]
+        resume: bool,
         /// Simulated run length in hours (overrides the scenario).
         #[arg(long)]
         hours: Option<f64>,
@@ -119,34 +125,38 @@ fn out_line(s: &str) {
     let _ = writeln!(std::io::stdout(), "{s}");
 }
 
-#[allow(clippy::similar_names)]
-fn load_scenario(
+fn session(
     scenario: Option<PathBuf>,
     preset: Option<String>,
-    hours: Option<f64>,
-    speed: Option<f64>,
-    seed: Option<u64>,
-    size_scale: Option<f64>,
-) -> Result<Scenario, Error> {
-    let mut sc = match (scenario, preset) {
-        (Some(p), _) => Scenario::load(&p)?,
-        (None, Some(name)) => Scenario::preset(&name)?,
-        (None, None) => return Err(Error::Scenario("choose --scenario or --preset".into())),
-    };
-    if let Some(h) = hours {
-        sc.hours = h;
+    overrides: Overrides,
+) -> Result<Session, Error> {
+    match (scenario, preset) {
+        (Some(p), _) => Session::file(&p, overrides),
+        (None, Some(name)) => Session::preset(&name, overrides),
+        (None, None) => Err(Error::Scenario(
+            "choose --scenario, --preset or --resume".into(),
+        )),
     }
-    if let Some(s) = speed {
-        sc.speed = s;
+}
+
+fn dry_run_plan(sc: &Scenario, out: &Path) -> Result<(), Error> {
+    let plans = plan::build(sc, std::time::SystemTime::now())?;
+    let total: f64 = plans.iter().map(plan::RunPlan::end_s).fold(0.0, f64::max);
+    for p in &plans {
+        out_line(&format!(
+            "{}  {} files, {}",
+            out.join(p.id.rel_dir()).display(),
+            p.files.len(),
+            bytes(p.total_bytes())
+        ));
     }
-    if let Some(s) = seed {
-        sc.seed = s;
-    }
-    if let Some(s) = size_scale {
-        sc.fake.size_scale = s;
-    }
-    sc.validate()?;
-    Ok(sc)
+    out_line(&format!(
+        "{} simulated in about {} wall clock; {} in total",
+        hms(total),
+        hms(total / sc.speed),
+        bytes(plans.iter().map(plan::RunPlan::total_bytes).sum())
+    ));
+    Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -180,6 +190,7 @@ fn run(cli: Cli) -> Result<(), Error> {
             scenario,
             preset,
             out,
+            resume,
             hours,
             speed,
             seed,
@@ -188,41 +199,41 @@ fn run(cli: Cli) -> Result<(), Error> {
             dry_run,
             quiet,
         } => {
-            let sc = load_scenario(scenario, preset, hours, speed, seed, size_scale)?;
             let keep_free = parse_size(&keep_free).map_err(Error::Scenario)?;
-            if dry_run {
-                let plans = plan::build(&sc, std::time::SystemTime::now())?;
-                let total: f64 = plans.iter().map(plan::RunPlan::end_s).fold(0.0, f64::max);
-                for p in &plans {
-                    out_line(&format!(
-                        "{}  {} files, {}",
-                        out.join(p.id.rel_dir()).display(),
-                        p.files.len(),
-                        bytes(p.total_bytes())
-                    ));
+            let opts = Options {
+                keep_free,
+                progress_every: (!quiet).then_some(Duration::from_secs(10)),
+            };
+            let outcome = if resume {
+                eprintln!(
+                    "ont-runsim: resuming SIMULATED RUNS (test data) in {}",
+                    out.display()
+                );
+                engine::resume(&out, speed, &opts)?
+            } else {
+                let session = session(
+                    scenario,
+                    preset,
+                    Overrides {
+                        hours,
+                        speed,
+                        seed,
+                        size_scale,
+                    },
+                )?;
+                let sc = session.scenario()?;
+                if dry_run {
+                    dry_run_plan(&sc, &out)?;
+                    return Ok(());
                 }
-                out_line(&format!(
-                    "{} simulated in about {} wall clock; {} in total",
-                    hms(total),
-                    hms(total / sc.speed),
-                    bytes(plans.iter().map(plan::RunPlan::total_bytes).sum())
-                ));
-                return Ok(());
-            }
-            eprintln!(
-                "ont-runsim: SIMULATED RUNS (test data) into {}; {} h at {}x speed",
-                out.display(),
-                sc.hours,
-                sc.speed
-            );
-            let outcome = engine::simulate(
-                &sc,
-                &out,
-                &Options {
-                    keep_free,
-                    progress_every: (!quiet).then_some(Duration::from_secs(10)),
-                },
-            )?;
+                eprintln!(
+                    "ont-runsim: SIMULATED RUNS (test data) into {}; {} h at {}x speed",
+                    out.display(),
+                    sc.hours,
+                    sc.speed
+                );
+                engine::simulate(&session, &out, &opts)?
+            };
             for r in &outcome.status.runs {
                 out_line(&format!(
                     "{}  {}  {} files",
@@ -259,6 +270,12 @@ fn run(cli: Cli) -> Result<(), Error> {
             }
             if let Some(m) = &s.message {
                 out_line(&format!("  note: {m}"));
+            }
+            if s.state != "finished" && !s.is_live() {
+                out_line(&format!(
+                    "  continue it with: ont-runsim run --resume --out {}",
+                    out.display()
+                ));
             }
         }
         Cmd::Check {
