@@ -13,6 +13,7 @@
 - [Several sources and user transfer folders](user-guide/transfer-folders.md)
 - [Deleting offloaded runs](user-guide/cleanup.md)
 - [Monitoring dashboard](user-guide/tui.md)
+- [Reports](user-guide/reports.md)
 - [Known limitations](user-guide/limitations.md)
 - [Configuration](user-guide/configuration.md)
 - [Run simulator](user-guide/simulator.md)

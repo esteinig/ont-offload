@@ -105,3 +105,9 @@ format = "text"                  # or "json"
 theme = "plain"                  # "plain", "matrix", "phosphor" or "synthwave"
 refresh = "1s"                   # 200ms to 60s
 bell = true                      # ring the terminal bell on a new alert
+
+[report]
+# `ont-offload report status` and `report verify` (see the Reports page).
+# site = "Clinical Genomics, Example Hospital"   # printed in every title block
+prefix = "OOF"                   # report ids and file names
+# logo = "/etc/ont-offload/logo.png"             # PNG, JPEG or SVG
