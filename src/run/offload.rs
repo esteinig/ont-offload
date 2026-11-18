@@ -5,7 +5,6 @@
 //! journal does not already record as committed, check every committed
 //! file's size, then write `manifest.sha256`, `run.json` and `COMPLETE` last.
 
-use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -14,12 +13,10 @@ use crate::copy::{self, CopyFail, CopyOptions};
 use crate::error::{Error, Result};
 use crate::fsio::{ErrorClass, FileKind, Fs, classify};
 use crate::guard::Guard;
-use crate::journal::{
-    self, COMPLETE, Journal, MANIFEST, RUN_JSON, Record, manifest_line, sha256_hex, write_atomic,
-};
+use crate::journal::{self, COMPLETE, Journal, Record};
 use crate::logging::escape_control;
 
-use super::{DetectedRun, Markers, dest_rel, safe_join, select};
+use super::{DetectedRun, Markers, dest_rel, finalise, safe_join, select};
 
 /// Outcome of [`offload`].
 #[derive(Debug, Clone, Default)]
@@ -227,59 +224,10 @@ pub fn offload(
         return Ok(report);
     }
 
-    // Size check of every committed file before the run is declared complete.
-    let mut manifest = String::new();
-    for f in &sel.files {
-        let c = j.files.get(&f.rel).ok_or_else(|| {
-            Error::Integrity(format!("{} is not in the journal", escape_control(&f.rel)))
-        })?;
-        let target = safe_join(&dest, Path::new(&f.rel)).map_err(Error::Config)?;
-        let len = fs.metadata(&target)?.len;
-        if len != c.size {
-            return Err(Error::Integrity(format!(
-                "{} has {len} bytes on the destination, {} were committed",
-                escape_control(&f.rel),
-                c.size
-            )));
-        }
-        manifest.push_str(&manifest_line(&c.sha256, &f.rel));
-    }
-    let manifest_sha = sha256_hex(manifest.as_bytes());
-    guard.check(fs)?;
-    write_atomic(fs, &dest, MANIFEST, manifest.as_bytes())?;
-
-    let run_json = serde_json::json!({
-        "tool": "ont-offload",
-        "version": env!("CARGO_PKG_VERSION"),
-        "run_id": j.id,
-        "run_name": run.name(),
-        "source": run.path.to_string_lossy(),
-        "destination": dest.to_string_lossy(),
-        "dest_starts_at": cfg.dest_starts_at.as_str(),
-        "target_id": cfg.target_id,
-        "host": journal::host_name(fs),
-        "run_marker": run.marker,
-        "complete_marker": run.complete,
-        "assumed_complete": run.complete.is_none(),
-        "started": started,
-        "finished": journal::now_rfc3339(),
-        "files": sel.files.len(),
-        "bytes": sel.bytes(),
-        "verify": format!("{:?}", cfg.transfer.verify).to_lowercase(),
-        "manifest_sha256": manifest_sha,
-        "excluded": sel.excluded,
-        "symlinks_not_followed": sel.symlinks,
-        "special_files": sel.special,
-        "nested_runs": sel.nested_runs,
-        "invalid_names": sel.invalid_names,
-        "reserved_names": sel.reserved,
-    });
-    let pretty = serde_json::to_string_pretty(&run_json).unwrap_or_default() + "\n";
-    write_atomic(fs, &dest, RUN_JSON, pretty.as_bytes())?;
-    guard.check(fs)?;
-    let mut complete = String::new();
-    let _ = writeln!(complete, "manifest_sha256={manifest_sha}");
-    write_atomic(fs, &dest, COMPLETE, complete.as_bytes())?;
+    // Size check of every committed file, then manifest, run.json, COMPLETE.
+    let out = finalise::prepare(cfg, fs, run, &dest, &j, &sel, &started, "run")?;
+    finalise::write(fs, guard, &dest, &out)?;
+    let manifest_sha = out.manifest_sha256;
     j.append(
         fs,
         Record::Complete {

@@ -1,0 +1,13 @@
+id = "SRS-RES-009"
+type = "requirement"
+title = "Incremental rescan"
+status = "draft"
+release = "v0.4"
+text = """
+Rescans only folders whose modification time changed since the last scan, with a full rescan every scan_full_every (default 10 min), so scan cost follows activity instead of run size.
+"""
+verification = "Fake-clock test: no file missed with incremental scans; scan work bounded for a full-size 72 h run"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-SCHED"]
+mitigates = ["HAZ-013"]

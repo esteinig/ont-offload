@@ -4,7 +4,7 @@ title = "Error classes"
 status = "draft"
 release = "v0.3"
 text = """
-Classifies I/O errors as transient, capacity, permanent or integrity and acts per class.
+Classifies I/O errors as transient (EIO, ESTALE, ENOTCONN, timeouts: pause all writes as an outage), capacity (ENOSPC, EDQUOT: pause and alert as an outage), integrity (source changed during the copy, size or read-back mismatch: retry the file) or permanent (anything else: retry the file up to max_attempts, then fail it; a foreign file in the way fails it at once), and acts per class. Transient and capacity errors never count as attempts.
 """
 verification = "Unit over errno table"
 

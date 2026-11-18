@@ -1,0 +1,13 @@
+id = "SRS-RES-008"
+type = "requirement"
+title = "Bounded memory and journal size"
+status = "draft"
+release = "v0.4"
+text = """
+Drops a run's journal and file tracking from memory once it is complete (and, from v0.4, no longer watched), and compacts a completed run's journal to one record per file plus the completion record.
+"""
+verification = "Fake-clock test over 200 simulated runs: memory and journal size stay within set bounds; 72 h soak in v0.5"
+
+[links]
+allocated_to = ["SWI-SCHED", "SWI-JOURNAL"]
+mitigates = ["HAZ-013"]

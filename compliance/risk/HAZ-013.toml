@@ -1,0 +1,15 @@
+id = "HAZ-013"
+type = "hazard"
+title = "Daemon slowed or killed by resource growth"
+status = "draft"
+cause = "Journals of every run seen are kept in memory for the life of the process, journals are never compacted, and every scan walks the whole source tree and every unfinished run"
+harm = "Offload delayed (slow scans, out-of-memory kill and restart)"
+severity = "minor"
+probability_before = "occasional"
+# Known limitation (v0.3), documented in the user guide under "Known limitations".
+# v0.3: bounded only by restarts; the watchdog and stall exit restart a hung daemon (SRS-RES-003) and restarts resume (SRS-RES-004). SRS-RES-008 and SRS-RES-009 (v0.4) bound memory, journal size and scan cost; the v0.5 72 h soak checks them.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-RES-003", "SRS-RES-004", "SRS-RES-008", "SRS-RES-009"]

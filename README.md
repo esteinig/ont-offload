@@ -6,7 +6,7 @@ Verified offload of Oxford Nanopore sequencing runs (live or completed) from a s
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](https://esteinig.github.io/ont-offload)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-> **Status: v0.2 (in development).** Completed runs can be copied with `ont-offload run` and checked with `ont-offload verify`; `check-config` lists detected runs and their destinations. Live runs (`watch`), parallel workers and the rate limit come in v0.3; other commands report the release in which they are planned. See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
+> **Status: v0.3 (in development).** `ont-offload watch` copies live and completed runs with parallel workers and a total rate limit, and rides out share outages of any length; `run` copies one completed run and `verify` checks a copy. Live state (`status`), `bench` and gated deletion come in v0.4 and v0.5; those commands report the release in which they are planned. Known limitations and their controls are listed in [the user guide](docs/src/user-guide/limitations.md). See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
 
 ## What it does
 
@@ -26,6 +26,7 @@ The workspace also contains `ont-runsim`, a test tool that writes simulated MinK
 cargo install --locked --git https://github.com/esteinig/ont-offload ont-offload
 ont-offload --help
 ont-offload check-config --config /etc/ont-offload/config.toml
+ont-offload watch --config /etc/ont-offload/config.toml        # or: systemctl enable --now ont-offload
 ont-offload run --config /etc/ont-offload/config.toml /data/<experiment>/<sample>/<run>
 ont-offload verify /mnt/nas/ont/<experiment>/<sample>/<run>
 ```

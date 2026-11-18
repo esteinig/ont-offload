@@ -25,4 +25,7 @@ sudo install -D -m 0640 packaging/ont-offload.example.toml /etc/ont-offload/conf
 echo "<target_id>" | sudo tee /mnt/nas/ont/.ont-offload-target
 ont-offload check-config
 sudo systemctl enable --now ont-offload
+systemctl status ont-offload     # status line: runs, backlog, outage
 ```
+
+The service runs `ont-offload watch`; see [Running the daemon](watch.md). Configuration changes need `sudo systemctl restart ont-offload`.

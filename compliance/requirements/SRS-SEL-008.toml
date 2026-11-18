@@ -1,0 +1,13 @@
+id = "SRS-SEL-008"
+type = "requirement"
+title = "Destination claim on the share"
+status = "draft"
+release = "v0.4"
+text = """
+Before the first file of a run is written, writes a claim file (.ont-offload-claim.json: target_id, host, source path, run id) into the destination run folder with create-new semantics, and refuses the run when the folder holds a claim for a different source, whichever host or state folder made it. ont-offload's own files in the destination folder are listed in run.json and ignored by verify.
+"""
+verification = "Two controllers with separate state folders on one share; claim from another host; integration on the nightly shares"
+
+[links]
+allocated_to = ["SWI-JOURNAL", "SWI-RUN"]
+mitigates = ["HAZ-010"]

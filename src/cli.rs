@@ -87,7 +87,11 @@ pub enum LogFormat {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Daemon: discover runs under the source root and offload live and completed runs.
-    Watch,
+    Watch {
+        /// Exit once every detected run is complete or failed (for scripts and tests).
+        #[arg(long)]
+        until_idle: bool,
+    },
     /// Offload one run in the foreground until it is complete or failed.
     Run {
         /// Run folder.
@@ -129,7 +133,7 @@ impl Command {
     #[must_use]
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Watch => "watch",
+            Self::Watch { .. } => "watch",
             Self::Run { .. } => "run",
             Self::Verify { .. } => "verify",
             Self::Status { .. } => "status",
@@ -145,7 +149,7 @@ impl Command {
         match self {
             Self::CheckConfig => "v0.1",
             Self::Run { .. } | Self::Verify { .. } => "v0.2",
-            Self::Watch => "v0.3",
+            Self::Watch { .. } => "v0.3",
             Self::Status { .. } | Self::Bench => "v0.4",
             Self::Cleanup { .. } => "v0.5",
         }
@@ -168,6 +172,7 @@ mod tests {
     fn parses_every_subcommand() {
         for args in [
             vec!["ont-offload", "watch"],
+            vec!["ont-offload", "watch", "--until-idle"],
             vec!["ont-offload", "run", "/data/x", "--completed"],
             vec!["ont-offload", "verify", "/mnt/x", "--source"],
             vec!["ont-offload", "status", "--json"],

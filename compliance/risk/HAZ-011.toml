@@ -1,0 +1,15 @@
+id = "HAZ-011"
+type = "hazard"
+title = "Run delayed behind other runs"
+status = "draft"
+cause = "Several runs compete for the workers; v0.3 queues ready files in source-path order, so a large run that sorts first can hold the pool"
+harm = "Delayed result for the later run"
+severity = "minor"
+probability_before = "occasional"
+# Known limitation (v0.3), documented in the user guide under "Known limitations".
+# v0.3: no fairness between runs; per-run backlog is only in the log. SRS-PAR-003 (v0.4) shares workers fairly and SRS-STATE-001 shows each run's backlog.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-PAR-003", "SRS-STATE-001"]

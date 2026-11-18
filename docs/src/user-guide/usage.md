@@ -2,7 +2,7 @@
 
 | Command | Purpose | Available from |
 | --- | --- | --- |
-| `ont-offload watch` | Daemon: discover runs under the source root, copy live and completed runs | v0.3 |
+| `ont-offload watch [--until-idle]` | Daemon: discover runs under the source root, copy live and completed runs; see [Running the daemon](watch.md) | v0.3 |
 | `ont-offload run <path> [--completed]` | Copy one completed run in the foreground; see [Offloading a run](offload.md) | v0.2 |
 | `ont-offload verify <run> [--source]` | Re-hash a destination run against its manifest; writes `VERIFIED.json` | v0.2 |
 | `ont-offload status [--json]` | Print the live-state snapshot | v0.4 |
@@ -21,5 +21,5 @@ Global options: `--config`, `--log-level`, `--log-file`, `--log-format text|json
 | 2 | Configuration or destination guard refused (also usage errors) |
 | 3 | One or more files or runs failed |
 | 4 | Integrity mismatch not resolved |
-| 75 | Restart needed (the share failed mid-run, or workers stuck after an outage); safe to resume |
+| 75 | Restart needed (`run`: the share failed mid-run; `watch`: every worker stalled); safe to resume |
 | 130 | Interrupted; journal consistent, safe to resume |

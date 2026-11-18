@@ -1,0 +1,15 @@
+id = "HAZ-012"
+type = "hazard"
+title = "File added after completion missing from the copy"
+status = "draft"
+cause = "A file is written into a run after settle_after_complete and after COMPLETE was written (re-basecalling output, regenerated report); completed runs are not rescanned until restart"
+harm = "Copy declared complete without data that analysis needs"
+severity = "serious"
+probability_before = "remote"
+# Known limitation (v0.3), documented in the user guide under "Known limitations".
+# v0.3: late files within settle_after_complete are caught (SRS-LIVE-003); later ones only at the next start, which re-offloads a changed run (SRS-RES-004). SRS-LIVE-004 (v0.4) keeps watching completed runs and withdraws COMPLETE first.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-LIVE-003", "SRS-RES-004", "SRS-LIVE-004"]

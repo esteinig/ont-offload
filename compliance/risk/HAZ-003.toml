@@ -7,6 +7,10 @@ harm = "Reduced sensitivity, missed finding"
 severity = "critical"
 probability_before = "occasional"
 # Residual probability is set when the risk controls are verified.
+# v0.3 review: all controls (SRS-SEL-006, SRS-LIVE-003, SRS-VER-002) are implemented
+# and verified (late files after the final summary, aborted runs never completed,
+# sha256sum -c on the copy). Proposed residual probability "improbable"; to be
+# confirmed by the risk owner before setting.
 probability_after = ""
 
 [links]

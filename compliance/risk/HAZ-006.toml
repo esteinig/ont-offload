@@ -10,7 +10,8 @@ probability_before = "remote"
 # v0.2 review: all controls (SRS-CPY-002, SRS-SEL-007) are implemented and verified
 # (foreign file conflict, claim collision, mapping property test). Proposed
 # residual probability "improbable"; to be confirmed by the risk owner.
+# v0.3: SRS-RES-007 (one process per state folder) added as a control and verified.
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-CPY-002", "SRS-SEL-007"]
+controlled_by = ["SRS-CPY-002", "SRS-SEL-007", "SRS-RES-007"]

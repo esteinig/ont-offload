@@ -1,0 +1,64 @@
+name: Nightly real shares
+
+# Offload a simulated live run to a real NFS and a real Samba share on the
+# runner, with the server stopped for two minutes in the middle, then check
+# the copy with ont-runsim, sha256sum -c and ont-offload verify.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  share:
+    name: ${{ matrix.share }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        share: [nfs, smb]
+    steps:
+      - uses: actions/checkout@v4 # pin to a commit SHA
+      - uses: dtolnay/rust-toolchain@master # pin to a commit SHA
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2 # pin to a commit SHA
+      - run: cargo build --release --locked -p ont-offload -p ont-runsim
+
+      - name: NFS server and mount
+        if: matrix.share == 'nfs'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q nfs-kernel-server
+          sudo mkdir -p /srv/ont /mnt/ont
+          sudo chown "$(id -u):$(id -g)" /srv/ont
+          echo "/srv/ont 127.0.0.1(rw,sync,no_subtree_check,insecure,all_squash,anonuid=$(id -u),anongid=$(id -g))" | sudo tee /etc/exports
+          sudo exportfs -ra
+          sudo systemctl restart nfs-kernel-server
+          sudo mount -t nfs4 -o soft,timeo=50,retrans=2 127.0.0.1:/srv/ont /mnt/ont
+          echo "DOWN_CMD=sudo systemctl stop nfs-kernel-server" >> "$GITHUB_ENV"
+          echo "UP_CMD=sudo systemctl start nfs-kernel-server" >> "$GITHUB_ENV"
+          echo "FSTYPE=nfs4" >> "$GITHUB_ENV"
+
+      - name: Samba server and mount
+        if: matrix.share == 'smb'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q samba cifs-utils
+          sudo mkdir -p /srv/smb /mnt/ont
+          sudo chown "$(id -u):$(id -g)" /srv/smb
+          printf '[ont]\n  path = /srv/smb\n  read only = no\n  guest ok = yes\n  force user = %s\n' "$(id -un)" | sudo tee -a /etc/samba/smb.conf
+          sudo systemctl restart smbd
+          sudo mount -t cifs //127.0.0.1/ont /mnt/ont -o guest,uid="$(id -u)",gid="$(id -g)",vers=3.0,soft,echo_interval=5
+          echo "DOWN_CMD=sudo systemctl stop smbd" >> "$GITHUB_ENV"
+          echo "UP_CMD=sudo systemctl start smbd" >> "$GITHUB_ENV"
+          echo "FSTYPE=cifs" >> "$GITHUB_ENV"
+
+      - run: scripts/real-share-test.sh /mnt/ont "$FSTYPE"
+        env:
+          OUTAGE_S: "120"

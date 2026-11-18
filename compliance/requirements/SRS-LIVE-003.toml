@@ -9,5 +9,5 @@ Marks a run complete only after a completion marker, settle_after_complete with 
 verification = "Simulator: late file after final_summary"
 
 [links]
-allocated_to = ["SWI-RUN", "SWI-JOURNAL"]
-mitigates = ["HAZ-003"]
+allocated_to = ["SWI-RUN", "SWI-JOURNAL", "SWI-SCHED"]
+mitigates = ["HAZ-003", "HAZ-012"]

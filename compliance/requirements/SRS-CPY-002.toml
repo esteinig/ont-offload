@@ -10,4 +10,4 @@ verification = "Integration"
 
 [links]
 allocated_to = ["SWI-COPY"]
-mitigates = ["HAZ-006"]
+mitigates = ["HAZ-006", "HAZ-010"]
