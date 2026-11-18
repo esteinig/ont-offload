@@ -212,9 +212,11 @@ pub struct StatusReportArgs {
     /// Folder for the report files.
     #[arg(long, short, default_value = ".")]
     pub out: PathBuf,
-    /// Comma-separated output formats.
-    #[arg(long, default_value = "json")]
-    pub format: String,
+    /// Comma-separated output formats: pdf (always with its json record),
+    /// json, typ (the typst sources and record, to compile elsewhere)
+    /// [default: pdf,json, or json in a build without PDF support].
+    #[arg(long)]
+    pub format: Option<String>,
     /// Also read each completed run's VERIFIED.json on the share.
     #[arg(long)]
     pub check_destination: bool,

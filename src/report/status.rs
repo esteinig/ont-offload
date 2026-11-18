@@ -828,7 +828,13 @@ fn judge(
     let open: Vec<&Incident> = incidents
         .iter()
         .map(|(_, i)| i)
-        .filter(|i| i.outcome == "open" && i.kind != "run_reopened")
+        .filter(|i| {
+            i.outcome == "open"
+                && matches!(
+                    i.kind.as_str(),
+                    "outage_started" | "capacity_low" | "source_space_low" | "records_space_low"
+                )
+        })
         .collect();
     for i in &open {
         action.push(format!(
@@ -921,18 +927,26 @@ fn judge(
         crate::config::units::Bytes(t.bytes_committed),
         t.files_committed
     );
+    let review = if attention.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ", {} to review",
+            plural(attention.len() as u64, "point", "points")
+        )
+    };
     let (status, headline) = if !action.is_empty() {
         (
             verdict::ACTION,
-            format!("Action required: {}. {summary}", action[0]),
+            format!(
+                "{} action{review}. {summary}",
+                plural(action.len() as u64, "issue needs", "issues need")
+            ),
         )
     } else if !attention.is_empty() {
         (
             verdict::ATTENTION,
-            format!(
-                "Nothing is open; review: {}. {summary}",
-                attention.join("; ")
-            ),
+            format!("Nothing is open{review}. {summary}"),
         )
     } else {
         (

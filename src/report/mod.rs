@@ -6,6 +6,7 @@
 //! read: nothing in the state folder or on the share is changed.
 
 pub mod history;
+pub mod render;
 pub mod status;
 pub mod time;
 
@@ -20,13 +21,27 @@ use crate::logging::escape_control;
 
 /// Output formats of a report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Formats {
     /// The JSON record.
     pub json: bool,
+    /// The PDF.
+    pub pdf: bool,
+    /// The typst sources with the record, to compile elsewhere.
+    pub typ: bool,
 }
 
+/// Formats when `--format` is not given: the PDF and its record, or only
+/// the record in a build without PDF support.
+pub const DEFAULT_FORMATS: &str = if cfg!(feature = "report") {
+    "pdf,json"
+} else {
+    "json"
+};
+
 impl Formats {
-    /// Parse `json` (comma-separated).
+    /// Parse `pdf`, `json` and `typ` (comma-separated). The PDF always
+    /// comes with its record: it names the record's digest.
     ///
     /// # Errors
     /// [`Error::Config`] for an unknown or empty list.
@@ -35,9 +50,14 @@ impl Formats {
         for part in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
             match part {
                 "json" => f.json = true,
+                "pdf" => {
+                    f.pdf = true;
+                    f.json = true;
+                }
+                "typ" => f.typ = true,
                 other => {
                     return Err(Error::Config(format!(
-                        "--format: unknown format `{other}` (json)"
+                        "--format: unknown format `{other}` (pdf, json, typ)"
                     )));
                 }
             }
@@ -66,8 +86,8 @@ pub struct StatusArgs {
     pub log: Option<PathBuf>,
     /// `--out`.
     pub out: PathBuf,
-    /// `--format`.
-    pub format: String,
+    /// `--format` (else [`DEFAULT_FORMATS`]).
+    pub format: Option<String>,
     /// `--check-destination`.
     pub check_destination: bool,
     /// `--appendix`.
@@ -91,27 +111,80 @@ fn load_config(
     }
 }
 
-/// Write the outputs of a report into `dir`: each file atomically, then a
-/// `sha256sum` file of them all. Returns the file names.
+/// Write the outputs of a report into `dir`: each file atomically (names
+/// may hold one folder level), then a `sha256sum` file of them all.
+/// Returns the names written at the top of `dir`.
 fn write_outputs(
     fs: &dyn Fs,
     dir: &Path,
     stem: &str,
     files: &[(String, Vec<u8>)],
 ) -> Result<Vec<String>> {
+    use std::fmt::Write as _;
     fs.create_dir_all(dir)?;
     let mut sums = String::new();
     let mut names = Vec::new();
-    for (ext, data) in files {
-        let name = format!("{stem}.{ext}");
-        write_atomic(fs, dir, &name, data)?;
-        sums.push_str(&format!("{}  {name}\n", sha256_hex(data)));
-        names.push(name);
+    for (name, data) in files {
+        let path = dir.join(name);
+        let parent = path.parent().unwrap_or(dir);
+        fs.create_dir_all(parent)?;
+        let file = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        write_atomic(fs, parent, &file, data)?;
+        let _ = writeln!(sums, "{}  {name}", sha256_hex(data));
+        let top = name.split('/').next().unwrap_or(name).to_owned();
+        if !names.contains(&top) {
+            names.push(top);
+        }
     }
     let name = format!("{stem}.sha256");
     write_atomic(fs, dir, &name, sums.as_bytes())?;
     names.push(name);
     Ok(names)
+}
+
+/// The record, the PDF and the typst sources as asked for.
+fn render_outputs(
+    t: render::Template,
+    record: &[u8],
+    formats: Formats,
+    stem: &str,
+    mut extras: render::Extras,
+) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut json = record.to_vec();
+    json.push(b'\n');
+    extras.digest = sha256_hex(&json);
+    let mut files = Vec::new();
+    if formats.pdf {
+        files.push((format!("{stem}.pdf"), render::pdf(t, &json, &extras)?));
+    }
+    if formats.json {
+        files.push((format!("{stem}.json"), json.clone()));
+    }
+    if formats.typ {
+        for (name, data) in render::bundle(t, &json, &extras) {
+            files.push((format!("{stem}.typst/{name}"), data));
+        }
+    }
+    Ok(files)
+}
+
+/// The logo named in `[report]`, read for the template.
+fn read_logo(fs: &dyn Fs, logo: Option<&Path>) -> Result<Option<(String, Vec<u8>)>> {
+    let Some(path) = logo else { return Ok(None) };
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let bytes = fs.read(path).map_err(|e| {
+        Error::Config(format!(
+            "report.logo {}: {e}",
+            escape_control(&path.to_string_lossy())
+        ))
+    })?;
+    Ok(Some((format!("logo.{ext}"), bytes)))
 }
 
 /// A file-name-safe form of a host name.
@@ -141,7 +214,7 @@ pub fn status_report(
     now: u64,
     out: &mut dyn Write,
 ) -> Result<()> {
-    let formats = Formats::parse(&args.format)?;
+    let formats = Formats::parse(args.format.as_deref().unwrap_or(DEFAULT_FORMATS))?;
     let period = time::period(
         args.from.as_deref(),
         args.to.as_deref(),
@@ -199,12 +272,13 @@ pub fn status_report(
         time::compact_day(period.from),
         time::compact_day(period.to - 1)
     );
-    let mut files = Vec::new();
-    if formats.json {
-        let mut j = json.clone();
-        j.push(b'\n');
-        files.push(("json".to_owned(), j));
-    }
+    let extras = render::Extras {
+        appendix: args.appendix,
+        logo: read_logo(fs, report_cfg.as_ref().and_then(|r| r.logo.as_deref()))?,
+        when: now,
+        ..render::Extras::default()
+    };
+    let files = render_outputs(render::Template::Status, &json, formats, &stem, extras)?;
     let names = write_outputs(fs, &args.out, &stem, &files)?;
     writeln!(
         out,

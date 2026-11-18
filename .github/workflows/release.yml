@@ -97,7 +97,7 @@ jobs:
           targets: ${{ matrix.target }}
       - if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --release --locked --target ${{ matrix.target }} -p ont-offload -p ont-runsim --features ont-offload/tui
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p ont-offload -p ont-runsim --features ont-offload/tui,ont-offload/report
       - name: Package
         shell: bash
         run: |

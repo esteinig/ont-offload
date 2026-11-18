@@ -20,6 +20,9 @@ allow = [
   "Unicode-3.0",
   "Zlib",
   "CC0-1.0",
+  # resvg and usvg (SVG images in report PDFs, feature `report`): file-level
+  # copyleft, compatible with AGPL-3.0; used unmodified.
+  "MPL-2.0",
 ]
 
 [bans]

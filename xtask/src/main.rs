@@ -16,7 +16,7 @@ const USAGE: &str = "\
 cargo xtask <task> [options]
 
 tasks:
-  test [--unit|--integration]  run tests incl. the tui feature (nextest with JUnit if installed, else cargo test)
+  test [--unit|--integration]  run tests incl. the tui and report features (nextest with JUnit if installed, else cargo test)
   lint                         rustfmt --check and clippy -D warnings
   fmt                          format the workspace
   coverage                     llvm-cov lcov report (lcov.info)
@@ -127,7 +127,7 @@ fn test(args: &[&str]) -> Res {
                 "run",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--profile",
                 "unit",
             ])?;
@@ -138,13 +138,13 @@ fn test(args: &[&str]) -> Res {
                 "run",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--profile",
                 "integration",
             ])?;
         }
         if unit {
-            cargo(&["test", "--workspace", "--features", "tui", "--doc"])?;
+            cargo(&["test", "--workspace", "--features", "tui,report", "--doc"])?;
         }
         Ok(())
     } else {
@@ -154,12 +154,12 @@ fn test(args: &[&str]) -> Res {
                 "test",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--lib",
                 "--bins",
             ]),
-            (false, true) => cargo(&["test", "--workspace", "--features", "tui", "--tests"]),
-            _ => cargo(&["test", "--workspace", "--features", "tui"]),
+            (false, true) => cargo(&["test", "--workspace", "--features", "tui,report", "--tests"]),
+            _ => cargo(&["test", "--workspace", "--features", "tui,report"]),
         }
     }
 }
@@ -185,7 +185,13 @@ fn builtin_trace(results: bool) -> Res {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         eprintln!("$ {cargo} test --workspace --features tui --no-fail-fast");
         let out = Command::new(&cargo)
-            .args(["test", "--workspace", "--features", "tui", "--no-fail-fast"])
+            .args([
+                "test",
+                "--workspace",
+                "--features",
+                "tui,report",
+                "--no-fail-fast",
+            ])
             .current_dir(root())
             .output()
             .map_err(|e| format!("cannot run cargo test: {e}"))?;

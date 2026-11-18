@@ -290,9 +290,9 @@ fn failures_open_conditions_and_record_gaps_require_action() {
     );
     assert!(reasons.contains("events 8 to 9 missing"), "{reasons}");
     assert!(
-        r.verdict
-            .headline
-            .starts_with("Action required: 1 run failed")
+        r.verdict.headline.starts_with("4 issues need action, "),
+        "{}",
+        r.verdict.headline
     );
     // The open outage runs to the end of the period.
     assert_eq!(r.totals.outages, 2);

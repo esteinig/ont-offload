@@ -60,6 +60,10 @@ fault-injection = []
 # The read-only monitoring dashboard (`ont-offload tui`, SWI-TUI). Off by
 # default so that the daemon's dependencies do not change.
 tui = ["dep:ratatui", "dep:crossterm"]
+# PDF rendering of reports (`ont-offload report --format pdf`) with typst
+# embedded, so nothing has to be installed on the sequencer. Off by default
+# so that the daemon's dependencies do not change; release builds enable it.
+report = ["dep:typst", "dep:typst-pdf"]
 
 [dependencies]
 anyhow = "1"
@@ -77,6 +81,10 @@ toml = { version = "0.8", default-features = false, features = ["parse"] }
 # Dashboard only (feature `tui`).
 ratatui = { version = "0.29", optional = true, default-features = false, features = ["crossterm"] }
 crossterm = { version = "0.28", optional = true }
+# Reports only (feature `report`). typst 0.13 is the newest release that
+# builds with the pinned toolchain (1.85).
+typst = { version = "0.13", optional = true }
+typst-pdf = { version = "0.13", optional = true }
 
 # Free space (statvfs) on the source and the share; already used by ont-runsim.
 [target.'cfg(unix)'.dependencies]
