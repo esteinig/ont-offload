@@ -7,6 +7,7 @@
 | Fault injection | `FaultyFs`: EIO/ESTALE bursts, ENOSPC, short writes, blocking writes, bit flips, vanishing sentinel, repointed `dest_root`, source appended mid-copy, failed rename; v0.2 covers these in `src/run/tests.rs` | every PR |
 | Simulator | `ont-runsim` on a fake clock: MinKNOW-shaped runs, faults on, destination compared with the simulator manifest | every PR |
 | Real shares | NFS and Samba on the CI runner, server stopped mid-run (`scripts/real-share-test.sh`) | nightly |
+| Laptop bench | a tmpfs folder as the share, simulated runs, outage by moving the sentinel (`scripts/local-test.sh`, [Testing on a laptop](../user-guide/local-testing.md)) | by hand |
 | Soak and qualification | Fake-clock soaks in CI (24 h replay; 72 h with 200 runs, hourly storage-side verification and cleanup, memory bounds); 24 to 72 h runs on staging shares, independent `sha256sum -c`; two weeks of dry-run cleanup reports reviewed on site | before each release |
 
 Every test carries `/// Verifies: SRS-...`; `cargo xtask trace --strict` fails when a requirement has no passing test.
@@ -18,7 +19,7 @@ Traceability is also checked by plain `cargo test`: `xtask/tests/traceability.rs
 - a `#[test]` in `src/` or `tests/` has no `Verifies:` tag;
 - an `Implements:` or `Verifies:` tag names a requirement that is not in `compliance/requirements/`;
 - a requirement is not allocated to an existing software item, or a software item's paths are missing once its first requirement is due;
-- a requirement due in or before the milestone (`MILESTONE` in `trace.rs`, now `v0.6`) has no `Implements:` tag or no verifying test;
+- a requirement due in or before the milestone (`MILESTONE` in `trace.rs`, now `v0.7`) has no `Implements:` tag or no verifying test;
 - a hazard has no control, or names a requirement that does not exist.
 
 It warns when a requirement is implemented outside its allocated software items, or when a hazard and a requirement do not list each other.
@@ -34,6 +35,10 @@ v0.4 adds, on the same harness: a second controller (own source and state folder
 ## Dashboard
 
 The dashboard's logic is tested without a terminal. `src/tui/model/tests.rs` runs the model on an injected time against schema-valid fixtures (`src/tui/fixtures.rs`: normal, outage, stalled worker, failed run, refused deletion): live until three intervals, then stale; no data and other schema versions; alerts from the snapshot and from events, clearing, acknowledgement and the bell count; and a refresh with every write operation failing in `FaultyFs`, with the state folder compared before and after. `src/tui/source/tests.rs` covers torn lines, rotation, truncation, sequence gaps and restarts. `src/tui/view/tests.rs` draws each scenario and each theme into a Ratatui `TestBackend` and compares the text with golden files in `src/tui/view/golden/` (`UPDATE_GOLDEN=1 cargo test --features tui` rewrites them; review the diff); it also checks that failures stand out in every theme and without colour, that nothing is called OK while stale, and that decoration stops for alerts. The 24 h replay soak reads the state folder with the dashboard model every 5 simulated minutes and checks that every alerting event is shown by the next refresh and that the data never reads as stale. `tests/tui.rs` runs `tui --check` with environment variables through the binary. Test runs use `--features tui` (`cargo xtask test` does).
+
+## Deployment files
+
+`tests/packaging.rs` checks the deployment files: the unit runs as `ont-offload` with `0750` state and log folders, umask `0027` and its restart rules; `sysusers` creates the user; logrotate renames (no `copytruncate`) and creates the log `0640`; the shell scripts parse. The log file's rotation, the share write probe and `verify --against` have unit tests, and `tests/offload.rs` runs `check-config` (probe), `verify --against` and `scripts/compare-with-legacy.sh` through the binary on a tmpfs share.
 
 ## State schemas
 

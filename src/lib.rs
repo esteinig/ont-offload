@@ -45,7 +45,16 @@ pub fn execute(cli: &Cli) -> Result<()> {
         Command::Run { path, completed } => {
             run_one(&cli.global.config, &RealFs, None, path, *completed, out)
         }
-        Command::Verify { run, source } => verify_run(&RealFs, run, *source, out),
+        Command::Verify {
+            run,
+            source,
+            against: None,
+        } => verify_run(&RealFs, run, *source, out),
+        Command::Verify {
+            run,
+            against: Some(other),
+            ..
+        } => compare_copy(&RealFs, run, other, out),
         Command::Watch { until_idle } => watch(
             &cli.global.config,
             std::sync::Arc::new(RealFs),
@@ -154,11 +163,16 @@ fn guard_for(cfg: &config::Config, mountinfo: Option<&Path>) -> Guard {
 ///
 /// `mountinfo` overrides `/proc/self/mountinfo` (tests).
 ///
-/// Implements: SRS-CFG-004, SRS-SEL-006, SRS-GRD-001
+/// When the guard passes, a probe file is written to the share and removed
+/// again to show that this user can write there and who will own the
+/// copies.
+///
+/// Implements: SRS-CFG-004, SRS-SEL-006, SRS-GRD-001, SRS-GRD-004
 ///
 /// # Errors
 /// [`Error::Config`] listing every problem, [`Error::Guard`] when the
-/// destination is refused (after the runs are listed); I/O errors.
+/// destination is refused or cannot be written (after the runs are
+/// listed); I/O errors.
 pub fn check_config(
     path: &Path,
     fs: &dyn Fs,
@@ -199,13 +213,36 @@ pub fn check_config(
     }
     let guard = guard_for(cfg, mountinfo);
     match guard.check(fs) {
-        Ok(m) => writeln!(
-            out,
-            "destination guard OK: sentinel matches, {} mounted from {} at {}",
-            m.fstype,
-            escape_control(&m.source),
-            escape_control(&m.point.to_string_lossy())
-        )?,
+        Ok(m) => {
+            writeln!(
+                out,
+                "destination guard OK: sentinel matches, {} mounted from {} at {}",
+                m.fstype,
+                escape_control(&m.source),
+                escape_control(&m.point.to_string_lossy())
+            )?;
+            let probe = match guard::probe_write(guard.dest(), cfg.transfer.file_mode, fs) {
+                Ok(p) => p,
+                Err(e) => {
+                    writeln!(out, "share write probe FAILED: {e}")?;
+                    return Err(e);
+                }
+            };
+            writeln!(
+                out,
+                "share write probe OK{}: copies will be owned by uid {} gid {}, mode {:04o}",
+                probe
+                    .process
+                    .map_or_else(String::new, |(u, g)| format!(" as uid {u} gid {g}")),
+                probe.uid,
+                probe.gid,
+                probe.mode
+            )?;
+            for w in probe.warnings() {
+                writeln!(out, "WARNING: {w}")?;
+                log::warn!("{w}");
+            }
+        }
         Err(e) => {
             writeln!(out, "destination guard FAILED: {e}")?;
             return Err(e);
@@ -291,6 +328,33 @@ pub fn run_one(
     }
 }
 
+/// `verify <run> --against <folder>`: check another copy of a run (the
+/// legacy service's, in a parallel run) against this run's manifest.
+/// Writes nothing.
+///
+/// Implements: SRS-VER-005
+///
+/// # Errors
+/// [`Error::Integrity`] on any difference.
+pub fn compare_copy(fs: &dyn Fs, run: &Path, other: &Path, out: &mut dyn Write) -> Result<()> {
+    let rep = journal::compare(fs, run, other)?;
+    writeln!(
+        out,
+        "{}: OK, {} files, {} bytes match the manifest of {} ({}){}",
+        escape_control(&other.to_string_lossy()),
+        rep.files,
+        rep.bytes,
+        escape_control(&run.to_string_lossy()),
+        rep.manifest_sha256,
+        if rep.incomplete {
+            "; note: this run is not complete yet"
+        } else {
+            ""
+        }
+    )?;
+    Ok(())
+}
+
 /// `verify <run> [--source]`: re-hash a destination run against its manifest.
 ///
 /// Implements: SRS-VER-003, SRS-VER-004
@@ -323,7 +387,10 @@ pub fn verify_run(fs: &dyn Fs, run: &Path, source: bool, out: &mut dyn Write) ->
 /// consistent at every moment, so stopping the process (SIGTERM, SIGKILL,
 /// power loss) is always safe; the next start resumes.
 ///
-/// Implements: SRS-RES-007, SRS-PAR-001, SRS-RES-006, SRS-RATE-003
+/// Running as root is logged as a warning: the service is meant to run as
+/// its own user.
+///
+/// Implements: SRS-RES-007, SRS-PAR-001, SRS-RES-006, SRS-RATE-003, SRS-DEP-001
 ///
 /// # Errors
 /// [`Error::Config`] or [`Error::Guard`] at start-up, [`Error::RestartNeeded`]
@@ -339,6 +406,12 @@ pub fn watch(
         log::warn!("{w}");
     }
     let cfg = loaded.config;
+    if guard::process_ids().is_some_and(|(uid, _)| uid == 0) {
+        log::warn!(
+            "running as root: run the service as a dedicated user that owns the files on the \
+             share (see the deployment guide)"
+        );
+    }
     let _lock = sched::lock::InstanceLock::acquire(&*fs, &cfg.state_dir.resolved)?;
     let guard = std::sync::Arc::new(guard_for(&cfg, mountinfo));
     log::info!(

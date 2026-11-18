@@ -889,3 +889,51 @@ fn verify_reports_extra_missing_and_source_differences() {
             .contains("not complete")
     );
 }
+
+/// A legacy copy of a run is checked against the run's manifest: equal,
+/// then a changed, a missing and an extra file are each reported, and
+/// nothing is written in either folder.
+///
+/// Verifies: SRS-VER-005
+#[test]
+fn another_copy_is_compared_with_the_manifest_and_nothing_is_written() {
+    let env = Env::new();
+    let runs = env.simulate(&[("exp1", "s1")], "");
+    let cfg = env.cfg("", "");
+    let r = env.detected(&cfg, &runs[0]);
+    let dest = offload(&cfg, &env.fs, &env.guard(&cfg), &r, false)
+        .unwrap()
+        .dest;
+    // The legacy service copies the source as it is, without our files.
+    let legacy = env.dir.path().join("legacy-copy");
+    for rel in all_files(&dest) {
+        if crate::journal::RESERVED_NAMES.contains(&rel.as_str()) {
+            continue;
+        }
+        let to = legacy.join(&rel);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(dest.join(&rel), &to).unwrap();
+    }
+    let before = (all_files(&dest), all_files(&legacy));
+    let rep = journal::compare(&env.fs, &dest, &legacy).unwrap();
+    assert!(rep.ok() && rep.files > 0 && rep.bytes > 0);
+
+    let files: Vec<String> = all_files(&legacy);
+    let changed = legacy.join(&files[0]);
+    let mut b = std::fs::read(&changed).unwrap();
+    b.push(b'x');
+    std::fs::write(&changed, b).unwrap();
+    std::fs::remove_file(legacy.join(&files[1])).unwrap();
+    std::fs::write(legacy.join("legacy-only.txt"), "x").unwrap();
+    let err = journal::compare(&env.fs, &dest, &legacy).unwrap_err();
+    assert_eq!(err.exit_code(), 4);
+    let msg = err.to_string();
+    assert!(
+        msg.contains("1 missing, 1 differ, 1 not in the manifest"),
+        "{msg}"
+    );
+
+    assert_eq!(all_files(&dest), before.0, "the run is untouched");
+    assert!(!dest.join(VERIFIED).exists() && !legacy.join(VERIFIED).exists());
+    assert!(journal::compare(&env.fs, &dest, &env.dir.path().join("absent")).is_err());
+}

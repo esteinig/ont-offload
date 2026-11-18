@@ -1,0 +1,13 @@
+id = "SRS-GRD-004"
+type = "requirement"
+title = "Share write probe"
+status = "draft"
+release = "v0.7"
+text = """
+When the destination guard passes, check-config writes, syncs, inspects and removes a probe file at the top of dest_root as the service user, fails when that is not possible, and reports the owner and mode the share gives the file. It warns when the process runs as root, when the owner differs from the process (root_squash, all_squash, a fixed CIFS uid) and when the share does not keep transfer.file_mode.
+"""
+verification = "Unit: probe on a folder, refused and failed writes leave nothing; warnings for root, squashed owner and lost mode; integration: check-config on a tmpfs share"
+
+[links]
+allocated_to = ["SWI-GUARD", "SWI-CLI"]
+mitigates = ["HAZ-019"]

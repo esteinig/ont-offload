@@ -112,6 +112,25 @@ fn write_config(dir: &std::path::Path, dest: &std::path::Path, extra: &str) -> s
     path
 }
 
+/// Verifies: SRS-LOG-002
+#[test]
+fn watch_logs_to_the_configured_file_and_other_commands_do_not() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let log = dir.path().join("configured.log");
+    let missing = dir.path().join("no-such-share");
+    let extra = format!("[logging]\nfile = {:?}\n", log.to_str().expect("utf8"));
+    let config = write_config(dir.path(), &missing, &extra);
+    let config = config.to_str().expect("utf8");
+    let _status = bin().args(["--config", config, "status"]).assert();
+    assert!(
+        !log.exists(),
+        "status must not open the configured log file"
+    );
+    bin().args(["--config", config, "watch"]).assert().failure();
+    let text = std::fs::read_to_string(&log).expect("watch wrote the configured log");
+    assert!(text.contains("starting: watch"), "{text}");
+}
+
 /// Verifies: SRS-CFG-002, SRS-CFG-004
 #[test]
 fn check_config_refuses_destination_on_source_device() {

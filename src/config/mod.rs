@@ -216,6 +216,18 @@ pub fn tui_settings(path: &Path, fs: &dyn Fs) -> Result<TuiSettings> {
     })
 }
 
+/// `logging.file` and `logging.format` of a configuration file, read
+/// leniently before logging starts: `None` when the file cannot be read or
+/// parsed (the command reports that itself once logging is up).
+///
+/// Implements: SRS-LOG-002
+#[must_use]
+pub fn logging_settings(path: &Path) -> Option<(Option<PathBuf>, LogFormat)> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let raw = parse(&text).ok()?;
+    Some((raw.logging.file.map(PathBuf::from), raw.logging.format))
+}
+
 /// `[state]` as written.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]

@@ -108,7 +108,11 @@ jobs:
             ext=""; [[ "${{ matrix.target }}" == *windows* ]] && ext=".exe"
             cp "target/${{ matrix.target }}/release/${bin}${ext}" "$dir/"
             cp LICENSE README.md "$dir/"
-            if [[ "$bin" == "ont-offload" ]]; then cp packaging/ont-offload-tui packaging/tui.env "$dir/"; fi
+            if [[ "$bin" == "ont-offload" ]]; then
+              cp -r packaging "$dir/"
+              mkdir -p "$dir/scripts"
+              cp scripts/compare-with-legacy.sh scripts/replay-soak.sh scripts/review-cleanup-reports.py "$dir/scripts/"
+            fi
             if [[ "$ext" == ".exe" ]]; then 7z a "${dir}.zip" "$dir" >/dev/null; else tar -czf "${dir}.tar.gz" "$dir"; fi
           done
       - uses: actions/upload-artifact@v4 # pin to a commit SHA

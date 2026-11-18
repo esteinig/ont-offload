@@ -1,0 +1,15 @@
+# logrotate for the ont-offload log (logging.file). Install as
+# /etc/logrotate.d/ont-offload. The daemon reopens its log by name within a
+# second of a rotation, so no signal and no copytruncate are needed;
+# copytruncate would lose lines and confuse the dashboard's log pane.
+/var/log/ont-offload/*.log {
+    weekly
+    maxsize 100M
+    rotate 12
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 ont-offload ont-offload
+    su ont-offload ont-offload
+}

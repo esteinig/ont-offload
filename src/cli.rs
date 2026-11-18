@@ -37,13 +37,14 @@ pub struct GlobalArgs {
     #[arg(long, global = true, value_enum, default_value_t = LogLevel::Info, env = "ONT_OFFLOAD_LOG")]
     pub log_level: LogLevel,
 
-    /// Also write logs to this file.
+    /// Also write logs to this file (`watch` defaults to `logging.file`
+    /// of the configuration).
     #[arg(long, global = true)]
     pub log_file: Option<PathBuf>,
 
-    /// Log line format.
-    #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
-    pub log_format: LogFormat,
+    /// Log line format [default: text, or `logging.format` for `watch`].
+    #[arg(long, global = true, value_enum)]
+    pub log_format: Option<LogFormat>,
 }
 
 /// Log levels accepted on the command line.
@@ -105,8 +106,12 @@ pub enum Command {
         /// Run folder on the destination.
         run: PathBuf,
         /// Also re-hash the source run recorded in run.json.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "against")]
         source: bool,
+        /// Instead, check another copy of the run (for example the legacy
+        /// service's) against this run's manifest; writes nothing.
+        #[arg(long, value_name = "FOLDER")]
+        against: Option<PathBuf>,
     },
     /// Print the live-state snapshot.
     Status {
@@ -174,6 +179,15 @@ pub enum Switch {
 }
 
 impl Command {
+    /// The command is the daemon, which writes the log file named in the
+    /// configuration (`logging.file`); other commands, often run by an
+    /// operator without write access to it, log to the console only unless
+    /// given `--log-file`.
+    #[must_use]
+    pub fn uses_config_log(&self) -> bool {
+        matches!(self, Self::Watch { .. })
+    }
+
     /// The command takes over the terminal (console logging would draw
     /// over it).
     #[must_use]
@@ -231,6 +245,13 @@ mod tests {
             vec!["ont-offload", "watch", "--until-idle"],
             vec!["ont-offload", "run", "/data/x", "--completed"],
             vec!["ont-offload", "verify", "/mnt/x", "--source"],
+            vec![
+                "ont-offload",
+                "verify",
+                "/mnt/x",
+                "--against",
+                "/mnt/legacy/x",
+            ],
             vec!["ont-offload", "status", "--json"],
             vec!["ont-offload", "check-config"],
             vec!["ont-offload", "bench"],

@@ -2,7 +2,7 @@
 
 Every known limitation of the current release is listed here with the hazard it relates to, what controls it today, and the control planned for a later release. Limitations that are already controlled are listed too, because the control is often a rule for the operator or leaves a remainder worth knowing. Hazards and requirements are in [`compliance/`](https://github.com/esteinig/ont-offload/tree/dev/compliance); the planned versions follow the [staged plan](../developer-guide/architecture.md#staged-implementation-plan).
 
-Status as of v0.6.
+Status as of v0.7.
 
 ## Open: controls planned
 
@@ -13,6 +13,14 @@ Status as of v0.6.
 | **A change to a run after `watch_completed_for` is noticed only at the next start.** Completed runs are watched for 24 h by default, then forgotten. | HAZ-012 (serious) | SRS-RES-004: at every start, a completed run whose files changed is withdrawn and offloaded again. **Operator rule:** raise `watch_completed_for` if runs are re-processed later than a day after they finish, or restart the service after re-processing an old run. | None planned; the window is a setting. |
 | **The dashboard is tested on text renders, not on real terminals.** Symbols (`● ▲ ✖ ◷`), colours and the bell depend on the terminal emulator and font used over SSH. | HAZ-015 (minor) | SRS-TUI-004: severity is also a word; golden renders and a contrast check per theme in CI. **Operator rule:** check each theme you use on the site's terminals once (`t` cycles them), and use `plain` or `NO_COLOR` where symbols do not show. | Site acceptance: dashboard checked on the sequencer's terminal with an injected outage. |
 | **The nightly NFS and Samba test has not run on GitHub yet.** | HAZ-007 | SRS-RES-005 is verified on a fake clock and by a local tmpfs rehearsal. | The first nightly run closes the gap. |
+
+## Controlled in v0.7
+
+| Limitation in v0.6 | Hazard | Control in v0.7 | What remains |
+| --- | --- | --- | --- |
+| **The log file grew without limit**, and logrotate renaming it left the daemon writing to the renamed file. | HAZ-018 (serious) | SRS-LOG-005: the log is reopened by name within a second of a rotation; `packaging/ont-offload.logrotate` rotates weekly or at 100 MB. | None. |
+| **The service ran as root**, so on an NFS export with `root_squash` its files arrived as `nobody`, and nothing showed who would own the copies. | HAZ-019 (minor) | SRS-DEP-001: the unit runs as the user `ont-offload` with private state and logs. SRS-GRD-004: `check-config` writes a probe file on the share and reports its owner and mode, with warnings for root, mapped owners and lost modes. | Whether the receiving side can read the copies is checked by hand at installation ([Deploying](deployment.md#5-checks-before-the-first-start)). |
+| **No way to compare with the legacy service during a parallel run.** | HAZ-003 | SRS-VER-005: `verify <run> --against <legacy copy>` and `scripts/compare-with-legacy.sh`. | The parallel run itself (site acceptance). |
 
 ## Controlled in v0.6
 
@@ -57,6 +65,7 @@ These four limitations were open in v0.3. Each now has a control in the software
 | A run marker reappearing at the path of a deleted run is not offloaded. | HAZ-007 | SRS-DEL-006: a `run_failed` alert names the journal to move away to offload it. |
 | `deletions.jsonl` and `cleanup-reports.jsonl` grow without limit. | none | By design: they are the record of what was deleted and why. Archive them with the other site records. |
 | The dashboard is not an alerting system: nobody may be watching it, and its bell rings only in an open terminal. | HAZ-015 | SRS-STATE-003: `notify_command` stays the alert path that reaches a person. Configure it; treat the dashboard as a view. |
+| With cleanup on, the service user needs write access to the run folders on the sequencer to delete them. | HAZ-009 | By design: no privilege beyond the user's own. Grant the group write access by ACL ([Deploying](deployment.md#3-service-user-and-permissions)); a refused deletion stops the pass and raises `deletion_stopped`. |
 | The dashboard reads only the `state.json` version of its own release; a newer daemon's snapshot shows UNSUPPORTED STATE or NO DATA. | HAZ-016 | SRS-TUI-007: nothing of another version is shown. Use the dashboard of the same ont-offload version as the daemon. |
 | Acknowledging an alert hides the banner on that screen only. | HAZ-015 | SRS-TUI-003: by design; the alert stays in the alerts panel, in `state.json` and in other dashboards. |
 | The log pane colours lines by the words `WARN` and `ERROR` in them. | none | Context only: alerts and failures come from `state.json` and `events.jsonl`, never from the log. |

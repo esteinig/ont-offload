@@ -1,0 +1,13 @@
+id = "SRS-VER-005"
+type = "requirement"
+title = "Comparison with another copy"
+status = "draft"
+release = "v0.7"
+text = """
+verify <run> --against <folder> hashes every file of the run's manifest in another copy of the run (the legacy service's during a parallel run) and reports files missing, different or only there, without writing in either folder; scripts/compare-with-legacy.sh does this for every completed run under dest_root.
+"""
+verification = "Unit: equal, changed, missing and extra files, nothing written; integration: verify --against and the script through the binary"
+
+[links]
+allocated_to = ["SWI-JOURNAL", "SWI-CLI"]
+mitigates = ["HAZ-003"]

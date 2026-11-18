@@ -1,0 +1,13 @@
+id = "SRS-DEP-001"
+type = "requirement"
+title = "Service user and private state"
+status = "draft"
+release = "v0.7"
+text = """
+The systemd unit runs watch as the dedicated user and group ont-offload (packaging/ont-offload.sysusers), with the state and log folders 0750, umask 0027 and no new privileges, so that the share sees one owner and only group members read state and logs; watch logs a warning when it runs as root. An existing non-root account (for example prom on a PromethION) can be used instead through the drop-in packaging/run-as-existing-user.conf.
+"""
+verification = "Packaging test of the unit and sysusers files; shell scripts parse"
+
+[links]
+allocated_to = ["SWI-CLI"]
+mitigates = ["HAZ-019", "HAZ-018"]
