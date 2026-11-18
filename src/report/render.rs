@@ -21,12 +21,16 @@ const FONTS: [&[u8]; 6] = [
 pub const COMMON: &str = include_str!("templates/common.typ");
 /// The status report template.
 pub const STATUS: &str = include_str!("templates/status.typ");
+/// The verification report template.
+pub const VERIFICATION: &str = include_str!("templates/verification.typ");
 
 /// Which report a record is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Template {
     /// `status.typ`.
     Status,
+    /// `verification.typ`.
+    Verification,
 }
 
 impl Template {
@@ -35,6 +39,7 @@ impl Template {
     pub fn main(self) -> (&'static str, &'static str) {
         match self {
             Self::Status => ("status.typ", STATUS),
+            Self::Verification => ("verification.typ", VERIFICATION),
         }
     }
 }

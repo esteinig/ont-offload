@@ -182,6 +182,55 @@ pub enum ReportCmd {
     /// records: runs, data, incidents, sessions, cleanup and record
     /// completeness, with a verdict.
     Status(StatusReportArgs),
+    /// Whether an execution was offloaded completely and correctly: a
+    /// simulation (ont-runsim) or a MinKNOW mock run, checked against a
+    /// reference ont-offload did not produce, under a test protocol. Exits
+    /// 0 on PASS, 3 on FAIL and 5 when a required check cannot be decided.
+    Verify(VerifyReportArgs),
+}
+
+/// `report verify`.
+#[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("reference").required(true).args(["sim", "minknow"])))]
+pub struct VerifyReportArgs {
+    /// Output folder of ont-runsim (its manifests are the reference).
+    #[arg(long, value_name = "OUT")]
+    pub sim: Option<PathBuf>,
+    /// MinKNOW run folders at the source (re-hashed as the reference; they
+    /// must not have been deleted yet).
+    #[arg(long, value_name = "RUN", num_args = 1..)]
+    pub minknow: Vec<PathBuf>,
+    /// Test protocol: simulation, p2i-acceptance, minknow-mock, or a
+    /// protocol file [default: simulation with --sim, minknow-mock with
+    /// --minknow].
+    #[arg(long)]
+    pub protocol: Option<String>,
+    /// Start of the execution, RFC 3339 or a date [default: when the
+    /// simulation started, else the first event about a reference run].
+    #[arg(long)]
+    pub from: Option<String>,
+    /// End of the execution [default: now].
+    #[arg(long)]
+    pub to: Option<String>,
+    /// Who ran the execution, printed on the report.
+    #[arg(long)]
+    pub operator: Option<String>,
+    /// A deviation from the protocol, printed on the report (repeatable).
+    #[arg(long)]
+    pub deviation: Vec<String>,
+    /// State folder of the daemon [default: `state_dir` of the configuration].
+    #[arg(long)]
+    pub state_dir: Option<PathBuf>,
+    /// The daemon's log file [default: `logging.file` of the configuration].
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+    /// Folder for the report files.
+    #[arg(long, short, default_value = ".")]
+    pub out: PathBuf,
+    /// Comma-separated output formats: pdf, json, typ [default: pdf,json,
+    /// or json in a build without PDF support].
+    #[arg(long)]
+    pub format: Option<String>,
 }
 
 /// `report status`.
@@ -326,6 +375,27 @@ mod tests {
             vec!["ont-offload", "cleanup", "--dry-run"],
             vec!["ont-offload", "tui"],
             vec!["ont-offload", "report", "status", "--month", "2026-10"],
+            vec![
+                "ont-offload",
+                "report",
+                "verify",
+                "--sim",
+                "/data/ont-runsim",
+            ],
+            vec![
+                "ont-offload",
+                "report",
+                "verify",
+                "--minknow",
+                "/data/a",
+                "/data/b",
+                "--protocol",
+                "minknow-mock",
+                "--operator",
+                "E. S.",
+                "--deviation",
+                "share swapped",
+            ],
             vec![
                 "ont-offload",
                 "report",

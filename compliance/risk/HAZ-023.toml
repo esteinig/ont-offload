@@ -11,4 +11,4 @@ probability_before = "occasional"
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-RPT-001", "SRS-RPT-002", "SRS-RPT-004", "SRS-RPT-005", "SRS-LOG-006"]
+controlled_by = ["SRS-RPT-001", "SRS-RPT-002", "SRS-RPT-003", "SRS-RPT-004", "SRS-RPT-005", "SRS-LOG-006"]

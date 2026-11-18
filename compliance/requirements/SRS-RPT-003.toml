@@ -1,0 +1,13 @@
+id = "SRS-RPT-003"
+type = "requirement"
+title = "Verification report against an independent reference"
+status = "draft"
+release = "v0.9"
+text = """
+`ont-offload report verify` checks an execution against a test protocol (built-in or a file, recorded with its SHA-256) and an independent reference: the manifests the run simulator wrote as it closed each file (--sim), or the MinKNOW source runs re-hashed at report time with the file counts of their final summary (--minknow). Every file on the share is re-hashed and compared with the reference, not with ont-offload's manifest or receipt. Each check is PASS, FAIL, INCONCLUSIVE (its input is missing or unreadable) or N/A. The verdict is FAIL if a required check fails, else INCONCLUSIVE if a required check is inconclusive, else PASS; the process exits 0, 3 or 5 after writing the report. A --minknow folder that does not exist is refused without a report.
+"""
+verification = "Unit: hand-built runs pass, fail on a changed, missing or extra file even when manifest and receipt agree, and are never PASS without events or source. Integration: simulator runs offloaded by watch pass; a changed copy fails; a protocol needing a drill that was not done is inconclusive"
+
+[links]
+allocated_to = ["SWI-REPORT"]
+mitigates = ["HAZ-023"]

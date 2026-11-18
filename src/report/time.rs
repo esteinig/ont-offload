@@ -124,8 +124,12 @@ fn date(s: &str) -> Option<u64> {
     (civil(days) == (y, m, d)).then_some(days * 86_400)
 }
 
-/// The start of a bound: a date (midnight UTC) or an RFC 3339 time.
-fn bound(s: &str, end_of_day: bool) -> Result<u64, String> {
+/// The start of a bound: a date (midnight UTC) or an RFC 3339 time;
+/// with `end_of_day`, a date means the end of that day.
+///
+/// # Errors
+/// Neither a date nor a time.
+pub fn bound(s: &str, end_of_day: bool) -> Result<u64, String> {
     if let Some(t) = date(s) {
         return Ok(if end_of_day { t + 86_400 } else { t });
     }

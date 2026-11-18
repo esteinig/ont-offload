@@ -25,7 +25,11 @@
   stroke: 0.5pt + tone(s), text(size: 7pt, weight: "semibold", fill: tone(s), label(s)))
 
 // Zero-width spaces after separators so long run names wrap.
-#let brk(s) = if s == none { "—" } else { s.replace("_", "_\u{200b}").replace("/", "/\u{200b}") }
+// Break points in paths, names and digests (zero-width spaces).
+#let brk(s) = if s == none { "—" } else {
+  s.replace("_", "_\u{200b}").replace("/", "/\u{200b}")
+    .replace(regex("[0-9a-f]{16}"), m => m.text + "\u{200b}")
+}
 #let opt(v) = if v == none { "—" } else { v }
 #let short(h, n: 12) = if h == none { "—" } else { raw(h.slice(0, calc.min(n, h.len())) + "…") }
 

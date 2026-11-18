@@ -9,6 +9,7 @@ pub mod history;
 pub mod render;
 pub mod status;
 pub mod time;
+pub mod verification;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -282,10 +283,10 @@ pub fn status_report(
     let names = write_outputs(fs, &args.out, &stem, &files)?;
     writeln!(
         out,
-        "status report {}: {} ({} to {}): {} runs, {} committed; {}",
+        "status report {}: {} ({} to {}, UTC): {} runs, {} committed; {}",
         rec.report_id,
         rec.verdict.status.replace('_', " ").to_uppercase(),
-        rec.period.from,
+        time::day(period.from),
         rec.period.last_day,
         rec.totals.runs_active,
         config::units::Bytes(rec.totals.bytes_committed),
@@ -296,4 +297,206 @@ pub fn status_report(
             .join(", ")
     )?;
     Ok(())
+}
+
+/// Settings of `report verify` from the command line.
+#[derive(Debug, Clone, Default)]
+pub struct VerifyArgs {
+    /// `--sim`.
+    pub sim: Option<PathBuf>,
+    /// `--minknow`.
+    pub minknow: Vec<PathBuf>,
+    /// `--protocol`.
+    pub protocol: Option<String>,
+    /// `--from`.
+    pub from: Option<String>,
+    /// `--to`.
+    pub to: Option<String>,
+    /// `--operator`.
+    pub operator: Option<String>,
+    /// `--deviation`.
+    pub deviations: Vec<String>,
+    /// `--state-dir`.
+    pub state_dir: Option<PathBuf>,
+    /// `--log`.
+    pub log: Option<PathBuf>,
+    /// `--out`.
+    pub out: PathBuf,
+    /// `--format`.
+    pub format: Option<String>,
+}
+
+/// `report verify`: the verification report of an execution. The report
+/// is written whatever the verdict; the exit code carries the verdict.
+///
+/// Implements: SRS-RPT-003, SRS-RPT-005
+///
+/// # Errors
+/// [`Error::Config`] for bad arguments; I/O errors writing the outputs;
+/// [`Error::VerificationFailed`] or [`Error::Inconclusive`] after writing
+/// a report that did not pass.
+#[allow(clippy::too_many_lines)]
+pub fn verification_report(
+    config_path: &Path,
+    fs: &dyn Fs,
+    args: &VerifyArgs,
+    now: u64,
+    out: &mut dyn Write,
+) -> Result<()> {
+    use verification::{EnvEntry, Mode, Protocol};
+    let formats = Formats::parse(args.format.as_deref().unwrap_or(DEFAULT_FORMATS))?;
+    let mode = match (&args.sim, args.minknow.is_empty()) {
+        (Some(sim), true) => Mode::Simulation(sim.clone()),
+        (None, false) => Mode::Minknow(args.minknow.clone()),
+        _ => return Err(Error::Config("give either --sim or --minknow".into())),
+    };
+    if let Mode::Minknow(runs) = &mode {
+        if let Some(r) = runs.iter().find(|r| {
+            !fs.metadata(r)
+                .is_ok_and(|m| m.kind == crate::fsio::FileKind::Dir)
+        }) {
+            return Err(Error::Config(format!(
+                "--minknow {}: not a run folder at the source",
+                r.display()
+            )));
+        }
+    }
+    let protocol_name = args.protocol.clone().unwrap_or_else(|| {
+        match mode {
+            Mode::Simulation(_) => "simulation",
+            Mode::Minknow(_) => "minknow-mock",
+        }
+        .into()
+    });
+    let protocol = Protocol::load(fs, &protocol_name).map_err(Error::Config)?;
+    let window = match (&args.from, &args.to) {
+        (None, None) => None,
+        (from, to) => {
+            let to = to
+                .as_deref()
+                .map_or(Ok(now), |t| time::bound(t, true))
+                .map_err(Error::Config)?;
+            let from = from
+                .as_deref()
+                .map_or(Ok(0), |f| time::bound(f, false))
+                .map_err(Error::Config)?;
+            if to <= from {
+                return Err(Error::Config("--from must be before --to".into()));
+            }
+            Some(time::Period { from, to })
+        }
+    };
+    let cfg = load_config(config_path, fs, args.state_dir.is_some())?;
+    let state_dir = args
+        .state_dir
+        .clone()
+        .or_else(|| cfg.as_ref().map(|c| c.state_dir.resolved.clone()))
+        .ok_or_else(|| Error::Config("no state folder: pass --state-dir".into()))?;
+    let log = args
+        .log
+        .clone()
+        .or_else(|| cfg.as_ref().and_then(|c| c.log_file.clone()));
+    let report_cfg = cfg.as_ref().map(|c| c.report.clone());
+    let prefix = report_cfg
+        .as_ref()
+        .map_or_else(|| "OOF".to_owned(), |r| r.prefix.clone());
+    let mut environment = Vec::new();
+    if let Some(c) = &cfg {
+        let mounts = fs
+            .read(Path::new("/proc/self/mountinfo"))
+            .map(|b| crate::guard::parse_mountinfo(&String::from_utf8_lossy(&b)))
+            .unwrap_or_default();
+        let fstype =
+            crate::guard::mount_of(&mounts, &c.dest_root.resolved).map(|m| m.fstype.clone());
+        environment.push(EnvEntry {
+            key: "Destination".into(),
+            value: format!(
+                "{} ({}), target {}",
+                c.dest_root.configured.display(),
+                fstype.unwrap_or_else(|| "file system unknown".into()),
+                c.target_id
+            ),
+        });
+        environment.push(EnvEntry {
+            key: "Sources".into(),
+            value: c
+                .sources
+                .iter()
+                .map(|s| format!("{} ({})", s.name, s.root.configured.display()))
+                .collect::<Vec<_>>()
+                .join(", "),
+        });
+        environment.push(EnvEntry {
+            key: "Settings".into(),
+            value: format!(
+                "workers {}, rate_limit {}, verify {:?}, settle {}",
+                c.bandwidth.workers,
+                c.bandwidth.rate_limit,
+                c.transfer.verify,
+                humantime::format_duration(c.transfer.settle)
+            )
+            .to_lowercase(),
+        });
+        if let Ok(b) = fs.read(config_path) {
+            environment.push(EnvEntry {
+                key: "Configuration".into(),
+                value: format!("{} (SHA-256 {})", config_path.display(), sha256_hex(&b)),
+            });
+        }
+    }
+    let inputs = verification::VerifyInputs {
+        mode,
+        protocol,
+        state_dir,
+        log,
+        window,
+        generated_at: now,
+        host: crate::journal::host_name(fs),
+        site: report_cfg.as_ref().and_then(|r| r.site.clone()),
+        prefix: prefix.clone(),
+        operator: args.operator.clone(),
+        deviations: args.deviations.clone(),
+        environment,
+    };
+    let rec = verification::build(fs, &inputs);
+    let json = serde_json::to_vec_pretty(&rec).map_err(|e| Error::Config(e.to_string()))?;
+    // OOF-VR-<host>-<day>-<hash>: the report id with the host.
+    let stem = format!(
+        "{prefix}-VR-{}-{}",
+        safe(&rec.host),
+        rec.report_id
+            .strip_prefix(&format!("{prefix}-VR-"))
+            .unwrap_or(&rec.report_id)
+    );
+    let extras = render::Extras {
+        logo: read_logo(fs, report_cfg.as_ref().and_then(|r| r.logo.as_deref()))?,
+        when: now,
+        ..render::Extras::default()
+    };
+    let files = render_outputs(
+        render::Template::Verification,
+        &json,
+        formats,
+        &stem,
+        extras,
+    )?;
+    let names = write_outputs(fs, &args.out, &stem, &files)?;
+    writeln!(
+        out,
+        "verification report {}: {} ({} of {} required checks passed); {}",
+        rec.report_id,
+        rec.verdict.status.to_uppercase(),
+        rec.verdict.required_passed,
+        rec.verdict.required,
+        names
+            .iter()
+            .map(|n| escape_control(&args.out.join(n).to_string_lossy()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )?;
+    match rec.verdict.status.as_str() {
+        verification::result::PASS => Ok(()),
+        verification::result::FAIL => Err(Error::VerificationFailed(rec.verdict.headline)),
+        _ => Err(Error::Inconclusive(rec.verdict.headline)),
+    }
 }

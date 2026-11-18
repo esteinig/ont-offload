@@ -21,7 +21,8 @@ Global options: `--config`, `--log-level`, `--log-file`, `--log-format text|json
 | 0 | All done and verified |
 | 1 | Internal error, or command not implemented yet |
 | 2 | Configuration or destination guard refused (also usage errors) |
-| 3 | One or more files or runs failed |
+| 3 | One or more files or runs failed; `report verify`: the verdict is FAIL |
 | 4 | Integrity mismatch not resolved |
+| 5 | `report verify`: the verdict is INCONCLUSIVE (a required check had no input) |
 | 75 | Restart needed (`run`: the share failed mid-run; `watch`: every worker stalled); safe to resume |
 | 130 | Interrupted; journal consistent, safe to resume |

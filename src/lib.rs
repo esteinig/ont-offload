@@ -38,6 +38,7 @@ use logging::escape_control;
 ///
 /// # Errors
 /// Returns the command's error; `main` maps it to an exit code.
+#[allow(clippy::too_many_lines)]
 pub fn execute(cli: &Cli) -> Result<()> {
     log::debug!("command: {:?}", cli.command);
     let out = &mut std::io::stdout();
@@ -104,6 +105,27 @@ pub fn execute(cli: &Cli) -> Result<()> {
                 format: a.format.clone(),
                 check_destination: a.check_destination,
                 appendix: a.appendix,
+            },
+            report::time::now(),
+            out,
+        ),
+        Command::Report {
+            kind: cli::ReportCmd::Verify(a),
+        } => report::verification_report(
+            &cli.global.config,
+            &RealFs,
+            &report::VerifyArgs {
+                sim: a.sim.clone(),
+                minknow: a.minknow.clone(),
+                protocol: a.protocol.clone(),
+                from: a.from.clone(),
+                to: a.to.clone(),
+                operator: a.operator.clone(),
+                deviations: a.deviation.clone(),
+                state_dir: a.state_dir.clone(),
+                log: a.log.clone(),
+                out: a.out.clone(),
+                format: a.format.clone(),
             },
             report::time::now(),
             out,

@@ -62,7 +62,7 @@
   table.header[Start (UTC)][Duration][Kind][What happened][Outcome],
   ..if r.incidents.len() == 0 { (none-row(5),) } else {
     r.incidents.map(i => (fmt-ts(i.start), fmt-dur(i.duration_s), label(i.kind),
-      [#i.message #if i.run != none [\ #text(size: 7pt, fill: muted, brk(i.run))]], chip(i.outcome))).flatten()
+      [#brk(i.message) #if i.run != none [\ #text(size: 7pt, fill: muted, brk(i.run))]], chip(i.outcome))).flatten()
   })
 
 = Service
@@ -78,7 +78,7 @@
 #table(columns: (auto, 1fr, auto, auto),
   table.header[Time (UTC)][Run][Data][Outcome],
   ..if r.cleanup.len() == 0 { (none-row(4),) } else {
-    r.cleanup.map(c => (fmt-ts(c.ts), [#text(size: 7.8pt, brk(c.run)) #if c.outcome != "deleted" [\ #text(size: 7pt, fill: muted, c.message)]], fmt-bytes(c.bytes), chip(c.outcome))).flatten()
+    r.cleanup.map(c => (fmt-ts(c.ts), [#text(size: 7.8pt, brk(c.run)) #if c.outcome != "deleted" [\ #text(size: 7pt, fill: muted, brk(c.message))]], fmt-bytes(c.bytes), chip(c.outcome))).flatten()
   })
 
 = Record completeness

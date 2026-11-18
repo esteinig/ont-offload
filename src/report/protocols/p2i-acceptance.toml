@@ -1,0 +1,8 @@
+# Built-in protocol: site acceptance on a sequencer with simulated runs, an
+# outage drill and a kill and restart (docs: P2i test runbook, steps 6 to 10).
+name = "Site acceptance (simulated runs, outage drill, restart)"
+version = "1"
+description = "As Simulated runs, and the share is taken away and given back during the execution, the daemon is killed and restarted, every run is verified on the share (ont-offload verify) and completes in time."
+max_minutes_to_complete = 15
+required = ["VC-01", "VC-02", "VC-03", "VC-04", "VC-05", "VC-06", "VC-07", "VC-08", "VC-09", "VC-10", "VC-11", "VC-12", "VC-13", "VC-14"]
+informational = ["VC-15"]
