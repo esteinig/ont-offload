@@ -1,0 +1,13 @@
+id = "SRS-TUI-008"
+type = "requirement"
+title = "Themes and quiet decoration"
+status = "draft"
+release = "v0.6"
+text = """
+The themes plain, matrix, phosphor and synthwave can be chosen by flag, environment variable or configuration ([tui] theme) and switched with t; decoration (matrix rain, phosphor cursor, synthwave horizon) stops while an alert is open or shown in the banner, or the data is not current.
+"""
+verification = "Render golden tests per theme; render test: decoration moves when all is well and stops for alerts and staleness"
+
+[links]
+allocated_to = ["SWI-TUI", "SWI-CONFIG"]
+mitigates = ["HAZ-015"]

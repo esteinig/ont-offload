@@ -70,6 +70,150 @@ pub struct RawConfig {
     /// `[state]`
     #[serde(default)]
     pub state: RawState,
+    /// `[tui]`
+    #[serde(default)]
+    pub tui: RawTui,
+}
+
+/// `[tui]` as written: settings of the monitoring dashboard.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct RawTui {
+    /// Colour theme.
+    pub theme: TuiTheme,
+    /// How often the files are re-read.
+    pub refresh: String,
+    /// Ring the terminal bell on a new alert.
+    pub bell: bool,
+}
+
+impl Default for RawTui {
+    fn default() -> Self {
+        Self {
+            theme: TuiTheme::Plain,
+            refresh: "1s".into(),
+            bell: true,
+        }
+    }
+}
+
+/// Dashboard colour themes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TuiTheme {
+    /// The terminal's own colours (default; also used for `NO_COLOR`).
+    #[default]
+    Plain,
+    /// Green on black.
+    Matrix,
+    /// Amber monochrome CRT.
+    Phosphor,
+    /// Neon magenta and cyan on deep purple.
+    Synthwave,
+}
+
+impl TuiTheme {
+    /// Every theme, in the order the dashboard cycles through them.
+    pub const ALL: [Self; 4] = [Self::Plain, Self::Matrix, Self::Phosphor, Self::Synthwave];
+
+    /// Name as written in the configuration.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Plain => "plain",
+            Self::Matrix => "matrix",
+            Self::Phosphor => "phosphor",
+            Self::Synthwave => "synthwave",
+        }
+    }
+
+    /// Parse a theme name.
+    ///
+    /// # Errors
+    /// A message listing the themes.
+    pub fn parse(name: &str) -> std::result::Result<Self, String> {
+        Self::ALL
+            .into_iter()
+            .find(|t| t.as_str() == name.trim())
+            .ok_or_else(|| {
+                format!(
+                    "unknown theme {:?}; use one of {}",
+                    escape_control(name),
+                    Self::ALL.map(Self::as_str).join(", ")
+                )
+            })
+    }
+}
+
+/// Where the dashboard reads from and how it looks, from the configuration
+/// file without the checks that need the share (the dashboard must start
+/// while the share or the daemon is down).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TuiSettings {
+    /// State folder of the daemon.
+    pub state_dir: PathBuf,
+    /// The daemon's log file, if one is configured.
+    pub log_file: Option<PathBuf>,
+    /// Theme.
+    pub theme: TuiTheme,
+    /// Refresh interval.
+    pub refresh: Duration,
+    /// Bell on a new alert.
+    pub bell: bool,
+}
+
+impl Default for TuiSettings {
+    fn default() -> Self {
+        Self {
+            state_dir: PathBuf::from(d_state_dir()),
+            log_file: None,
+            theme: TuiTheme::Plain,
+            refresh: Duration::from_secs(1),
+            bell: true,
+        }
+    }
+}
+
+/// The dashboard refresh interval: from 200 ms to 60 s.
+///
+/// # Errors
+/// A message for an unreadable or out-of-range value.
+pub fn tui_refresh(text: &str) -> std::result::Result<Duration, String> {
+    let d = parse_duration(text)?;
+    if d < Duration::from_millis(200) || d > Duration::from_secs(60) {
+        return Err(format!(
+            "{:?} is outside 200ms to 60s",
+            escape_control(text)
+        ));
+    }
+    Ok(d)
+}
+
+/// Read the dashboard's settings from a configuration file: `state_dir`,
+/// `logging.file` and `[tui]`. Paths are not checked here; the dashboard
+/// shows what it cannot read.
+///
+/// Implements: SRS-TUI-001, SRS-TUI-008
+///
+/// # Errors
+/// [`Error::Config`] for an unreadable or unparsable file or a bad `[tui]`
+/// value.
+pub fn tui_settings(path: &Path, fs: &dyn Fs) -> Result<TuiSettings> {
+    let shown = escape_control(&path.to_string_lossy());
+    let bytes = fs
+        .read(path)
+        .map_err(|e| Error::Config(format!("cannot read {shown}: {e}")))?;
+    let raw = parse(&String::from_utf8_lossy(&bytes))
+        .map_err(|e| Error::Config(format!("{shown}: {e}")))?;
+    let refresh = tui_refresh(&raw.tui.refresh)
+        .map_err(|e| Error::Config(format!("{shown}: tui.refresh: {e}")))?;
+    Ok(TuiSettings {
+        state_dir: PathBuf::from(&raw.state_dir),
+        log_file: raw.logging.file.as_deref().map(PathBuf::from),
+        theme: raw.tui.theme,
+        refresh,
+        bell: raw.tui.bell,
+    })
 }
 
 /// `[state]` as written.
@@ -1079,6 +1223,11 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
         ),
         DeleteMode::DryRun => c.warn("cleanup.delete", "dry-run: deletions are only logged"),
         DeleteMode::Off => {}
+    }
+
+    // Dashboard.
+    if let Err(e) = tui_refresh(&raw.tui.refresh) {
+        c.problem("tui.refresh", e);
     }
 
     // Guard.

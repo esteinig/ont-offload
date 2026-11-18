@@ -10,4 +10,4 @@ verification = "Unit: notify_command receives alerting events only; fake-clock t
 
 [links]
 allocated_to = ["SWI-STATE", "SWI-SCHED"]
-mitigates = ["HAZ-007"]
+mitigates = ["HAZ-007", "HAZ-015"]

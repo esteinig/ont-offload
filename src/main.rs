@@ -11,11 +11,16 @@ use ont_offload::error::exit;
 fn main() -> ExitCode {
     let cli = Cli::parse(); // usage errors exit with code 2 (clap)
 
-    if let Err(e) = ont_offload::logging::init(
-        cli.global.log_level.into(),
-        cli.global.log_file.as_deref(),
-        cli.global.log_format,
-    ) {
+    // The dashboard owns the screen: only errors reach the console.
+    let level: log::LevelFilter = cli.global.log_level.into();
+    let level = if cli.command.is_fullscreen() {
+        level.min(log::LevelFilter::Error)
+    } else {
+        level
+    };
+    if let Err(e) =
+        ont_offload::logging::init(level, cli.global.log_file.as_deref(), cli.global.log_format)
+    {
         eprintln!("ont-offload: {e}");
         return ExitCode::from(e.exit_code());
     }

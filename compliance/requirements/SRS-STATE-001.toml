@@ -10,4 +10,4 @@ verification = "Unit: schema validation of snapshots, drift caught; fake-clock t
 
 [links]
 allocated_to = ["SWI-STATE", "SWI-SCHED", "SWI-CLI"]
-mitigates = ["HAZ-007", "HAZ-011"]
+mitigates = ["HAZ-007", "HAZ-011", "HAZ-014"]

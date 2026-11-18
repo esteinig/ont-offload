@@ -19,6 +19,7 @@ pub mod logging;
 pub mod run;
 pub mod sched;
 pub mod state;
+pub mod tui;
 
 pub use error::{Error, Result};
 
@@ -77,6 +78,66 @@ pub fn execute(cli: &Cli) -> Result<()> {
             std::time::SystemTime::now(),
             out,
         ),
+        Command::Tui {
+            state_dir,
+            log,
+            theme,
+            refresh,
+            bell,
+            check,
+        } => {
+            let flags = tui::launch::Flags {
+                state_dir: state_dir.clone(),
+                log: log.clone(),
+                theme: theme.clone(),
+                refresh: refresh.clone(),
+                bell: bell.map(|b| b == cli::Switch::On),
+            };
+            dashboard(
+                &cli.global.config,
+                &RealFs,
+                &flags,
+                *check,
+                &|n| std::env::var(n).ok(),
+                out,
+            )
+        }
+    }
+}
+
+/// `tui [--check]`: the read-only dashboard. With `check`, print the
+/// resolved settings and whether each file can be read instead. `env`
+/// looks up an environment variable (tests pass their own).
+///
+/// Implements: SRS-TUI-009
+///
+/// # Errors
+/// [`Error::Config`] for a bad setting, or when the binary was built
+/// without the `tui` feature; terminal I/O errors.
+pub fn dashboard(
+    config_path: &Path,
+    fs: &dyn Fs,
+    flags: &tui::launch::Flags,
+    check: bool,
+    env: &dyn Fn(&str) -> Option<String>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let launch = tui::launch::resolve(config_path, fs, flags, env)?;
+    if check {
+        write!(out, "{}", tui::launch::describe(&launch, fs))?;
+        return Ok(());
+    }
+    #[cfg(feature = "tui")]
+    {
+        tui::app::run(&launch, fs)
+    }
+    #[cfg(not(feature = "tui"))]
+    {
+        Err(Error::Config(
+            "this binary was built without the dashboard; build with `--features tui` \
+             (`tui --check` works without it)"
+                .into(),
+        ))
     }
 }
 

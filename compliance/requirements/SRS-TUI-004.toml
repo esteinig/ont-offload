@@ -1,0 +1,13 @@
+id = "SRS-TUI-004"
+type = "requirement"
+title = "Severity never by colour alone"
+status = "draft"
+release = "v0.6"
+text = """
+Severity and staleness are written as a word and a symbol (OK, INFO, WARN, FAIL, STALE) in every theme; failures are bold and reversed or in a distinct colour; every theme passes a WCAG contrast check (4.5:1 for text and severities, 3:1 for frames); NO_COLOR or a terminal with fewer than 16 colours gives terminal colours only.
+"""
+verification = "Unit: contrast of every theme, distinct labels; render tests: FAIL stands out in every theme and without colour"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-015"]

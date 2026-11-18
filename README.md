@@ -6,7 +6,7 @@ Verified offload of Oxford Nanopore sequencing runs (live or completed) from a s
 [![Docs](https://img.shields.io/badge/docs-mdBook-blue)](https://esteinig.github.io/ont-offload)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-> **Status: v0.5 (in development).** `ont-offload watch` copies live and completed runs with parallel workers shared fairly between runs and a total rate limit, rides out share outages of any length, keeps completed runs under watch, publishes its live state (`state.json`, `events.jsonl`, `notify_command`) for `ont-offload status`, and, when enabled, deletes source runs that pass every deletion gate (off by default; run it in dry-run first). `bench` suggests settings for a share; `run` copies one completed run, `verify` checks a copy and writes the receipt, and `cleanup` runs a deletion pass by hand. A read-only terminal dashboard is planned for v0.6. Known limitations and their controls are listed in [the user guide](docs/src/user-guide/limitations.md). See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
+> **Status: v0.6 (in development).** `ont-offload watch` copies live and completed runs with parallel workers shared fairly between runs and a total rate limit, rides out share outages of any length, keeps completed runs under watch, publishes its live state (`state.json`, `events.jsonl`, `notify_command`) for `ont-offload status`, and, when enabled, deletes source runs that pass every deletion gate (off by default; run it in dry-run first). `bench` suggests settings for a share; `run` copies one completed run, `verify` checks a copy and writes the receipt, and `cleanup` runs a deletion pass by hand. `ont-offload tui` is a read-only terminal dashboard of the daemon, with alerts, staleness warnings and four themes (`plain`, `matrix`, `phosphor`, `synthwave`), started with flags, `ONT_OFFLOAD_*` environment variables or the `ont-offload-tui` launcher. Known limitations and their controls are listed in [the user guide](docs/src/user-guide/limitations.md). See the [staged plan](docs/src/developer-guide/architecture.md#staged-implementation-plan).
 
 ## What it does
 
@@ -23,7 +23,7 @@ The workspace also contains `ont-runsim`, a test tool that writes simulated MinK
 ## Quick start
 
 ```sh
-cargo install --locked --git https://github.com/esteinig/ont-offload ont-offload
+cargo install --locked --features tui --git https://github.com/esteinig/ont-offload ont-offload
 ont-offload --help
 ont-offload check-config --config /etc/ont-offload/config.toml
 ont-offload watch --config /etc/ont-offload/config.toml        # or: systemctl enable --now ont-offload

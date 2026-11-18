@@ -68,6 +68,7 @@ jobs:
           toolchain: "1.85"
       - uses: Swatinem/rust-cache@v2 # pin to a commit SHA
       - run: cargo build --workspace --locked
+      - run: cargo build --workspace --locked --features tui
 
   trace:
     name: trace

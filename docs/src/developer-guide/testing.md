@@ -18,7 +18,7 @@ Traceability is also checked by plain `cargo test`: `xtask/tests/traceability.rs
 - a `#[test]` in `src/` or `tests/` has no `Verifies:` tag;
 - an `Implements:` or `Verifies:` tag names a requirement that is not in `compliance/requirements/`;
 - a requirement is not allocated to an existing software item, or a software item's paths are missing once its first requirement is due;
-- a requirement due in or before the milestone (`MILESTONE` in `trace.rs`, now `v0.4`) has no `Implements:` tag or no verifying test;
+- a requirement due in or before the milestone (`MILESTONE` in `trace.rs`, now `v0.6`) has no `Implements:` tag or no verifying test;
 - a hazard has no control, or names a requirement that does not exist.
 
 It warns when a requirement is implemented outside its allocated software items, or when a hazard and a requirement do not list each other.
@@ -30,6 +30,10 @@ It warns when a requirement is implemented outside its allocated software items,
 `src/sched/tests.rs` drives the `watch` controller and the simulator together on a fake clock, step by step, with faults from `FaultyFs`: two live runs with rewritten files and late files; an aborted run (never completed); a 12 h live run through a 3 h outage, ESTALE and ENOSPC bursts and short writes; start with the share missing; a share of another target; stalled workers; errors by class; kill and restart. Every finished run is compared with the simulator's manifest.
 
 v0.4 adds, on the same harness: a second controller (own source and state folder) refused by the claim on the share; two runs served in turn by one worker; a completed run that gains a file and one changed in place, withdrawn before it is copied again; completed runs dropped from memory, journals compacted and runs retired after the watch window; incremental rescans that list only changed folders and miss nothing; the share below `min_free`; low source space; `rate_limit` reload; and the **24 h replay soak**: two overlapping runs replaying a seed run's bytes for 24 simulated hours through a 2 h outage and an error burst, with every snapshot and event validated against the schemas every two simulated hours and both runs compared with the simulator's manifest. The rate limiter is checked on the fake clock (four workers, the total never above `rate + burst`) and with real threads; the outage tracker over a simulated 12 h outage (backoff cap, number of log lines) and a flapping link.
+
+## Dashboard
+
+The dashboard's logic is tested without a terminal. `src/tui/model/tests.rs` runs the model on an injected time against schema-valid fixtures (`src/tui/fixtures.rs`: normal, outage, stalled worker, failed run, refused deletion): live until three intervals, then stale; no data and other schema versions; alerts from the snapshot and from events, clearing, acknowledgement and the bell count; and a refresh with every write operation failing in `FaultyFs`, with the state folder compared before and after. `src/tui/source/tests.rs` covers torn lines, rotation, truncation, sequence gaps and restarts. `src/tui/view/tests.rs` draws each scenario and each theme into a Ratatui `TestBackend` and compares the text with golden files in `src/tui/view/golden/` (`UPDATE_GOLDEN=1 cargo test --features tui` rewrites them; review the diff); it also checks that failures stand out in every theme and without colour, that nothing is called OK while stale, and that decoration stops for alerts. The 24 h replay soak reads the state folder with the dashboard model every 5 simulated minutes and checks that every alerting event is shown by the next refresh and that the data never reads as stale. `tests/tui.rs` runs `tui --check` with environment variables through the binary. Test runs use `--features tui` (`cargo xtask test` does).
 
 ## State schemas
 

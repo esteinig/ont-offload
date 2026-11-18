@@ -16,7 +16,7 @@ const USAGE: &str = "\
 cargo xtask <task> [options]
 
 tasks:
-  test [--unit|--integration]  run tests (nextest with JUnit if installed, else cargo test)
+  test [--unit|--integration]  run tests incl. the tui feature (nextest with JUnit if installed, else cargo test)
   lint                         rustfmt --check and clippy -D warnings
   fmt                          format the workspace
   coverage                     llvm-cov lcov report (lcov.info)
@@ -122,21 +122,44 @@ fn test(args: &[&str]) -> Res {
     let integration = !args.contains(&"--unit");
     if has_nextest() {
         if unit {
-            cargo(&["nextest", "run", "--workspace", "--profile", "unit"])?;
+            cargo(&[
+                "nextest",
+                "run",
+                "--workspace",
+                "--features",
+                "tui",
+                "--profile",
+                "unit",
+            ])?;
         }
         if integration {
-            cargo(&["nextest", "run", "--workspace", "--profile", "integration"])?;
+            cargo(&[
+                "nextest",
+                "run",
+                "--workspace",
+                "--features",
+                "tui",
+                "--profile",
+                "integration",
+            ])?;
         }
         if unit {
-            cargo(&["test", "--workspace", "--doc"])?;
+            cargo(&["test", "--workspace", "--features", "tui", "--doc"])?;
         }
         Ok(())
     } else {
         eprintln!("xtask: cargo-nextest not found; falling back to cargo test (no JUnit reports)");
         match (unit, integration) {
-            (true, false) => cargo(&["test", "--workspace", "--lib", "--bins"]),
-            (false, true) => cargo(&["test", "--workspace", "--tests"]),
-            _ => cargo(&["test", "--workspace"]),
+            (true, false) => cargo(&[
+                "test",
+                "--workspace",
+                "--features",
+                "tui",
+                "--lib",
+                "--bins",
+            ]),
+            (false, true) => cargo(&["test", "--workspace", "--features", "tui", "--tests"]),
+            _ => cargo(&["test", "--workspace", "--features", "tui"]),
         }
     }
 }
@@ -160,9 +183,9 @@ fn lint() -> Res {
 fn builtin_trace(results: bool) -> Res {
     let outcomes = if results {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-        eprintln!("$ {cargo} test --workspace --no-fail-fast");
+        eprintln!("$ {cargo} test --workspace --features tui --no-fail-fast");
         let out = Command::new(&cargo)
-            .args(["test", "--workspace", "--no-fail-fast"])
+            .args(["test", "--workspace", "--features", "tui", "--no-fail-fast"])
             .current_dir(root())
             .output()
             .map_err(|e| format!("cannot run cargo test: {e}"))?;

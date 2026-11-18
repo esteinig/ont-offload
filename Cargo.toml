@@ -57,6 +57,9 @@ workspace = true
 [features]
 # Builds the FaultyFs fault-injection filesystem outside unit tests. Never enable for production builds.
 fault-injection = []
+# The read-only monitoring dashboard (`ont-offload tui`, SWI-TUI). Off by
+# default so that the daemon's dependencies do not change.
+tui = ["dep:ratatui", "dep:crossterm"]
 
 [dependencies]
 anyhow = "1"
@@ -70,6 +73,9 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
+# Dashboard only (feature `tui`).
+ratatui = { version = "0.29", optional = true, default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.28", optional = true }
 
 # Free space (statvfs) on the source and the share; already used by ont-runsim.
 [target.'cfg(unix)'.dependencies]

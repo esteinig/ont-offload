@@ -1,0 +1,13 @@
+id = "SRS-TUI-007"
+type = "requirement"
+title = "Unknown state versions refused"
+status = "draft"
+release = "v0.6"
+text = """
+A state.json of another schema or schema_version is refused before any field is read, with a message naming both versions and advising the dashboard of the same ont-offload version as the daemon; no value of it is shown.
+"""
+verification = "Unit: other versions and schemas refused; fixtures validated against the state and event JSON Schemas"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-016"]

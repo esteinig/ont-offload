@@ -1,0 +1,35 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# ont-offload-tui: start the read-only dashboard with the settings in an
+# environment file, so that an operator can type one word.
+#
+#   ONT_OFFLOAD_TUI_ENV   environment file to read (default /etc/ont-offload/tui.env)
+#   ONT_OFFLOAD_BIN       the ont-offload binary (default: ont-offload on PATH)
+#
+# Variables already set in the calling shell win over the file, and
+# arguments are passed on: `ont-offload-tui --theme matrix`,
+# `ont-offload-tui --check`.
+set -eu
+
+env_file="${ONT_OFFLOAD_TUI_ENV:-/etc/ont-offload/tui.env}"
+if [ -r "$env_file" ]; then
+    # Keep what the caller set: read the file, then restore those values.
+    saved="$(env | grep -E '^(ONT_OFFLOAD_[A-Z_]+|NO_COLOR)=' || true)"
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+    if [ -n "$saved" ]; then
+        while IFS= read -r line; do
+            export "$line"
+        done <<SAVED
+$saved
+SAVED
+    fi
+elif [ -n "${ONT_OFFLOAD_TUI_ENV:-}" ]; then
+    echo "ont-offload-tui: cannot read $env_file" >&2
+    exit 2
+fi
+
+exec "${ONT_OFFLOAD_BIN:-ont-offload}" tui "$@"

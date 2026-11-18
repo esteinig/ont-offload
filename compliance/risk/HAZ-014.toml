@@ -1,0 +1,14 @@
+id = "HAZ-014"
+type = "hazard"
+title = "Stale or frozen dashboard read as current"
+status = "draft"
+cause = "The daemon is stopped or hung, the SSH session or terminal freezes, or state.json is not written, while the dashboard still shows the last values"
+harm = "Operator believes a run is still offloading or is finished; analysis delayed or started early"
+severity = "minor"
+probability_before = "occasional"
+# v0.6: STALE and NO DATA cover the screen and nothing is called OK (SRS-TUI-002, verified on an injected clock); the header ticks the clock and the snapshot age every frame, so a frozen terminal shows a frozen clock; tui --check and the sources screen show which state folder is read (SRS-TUI-009). Proposed residual probability once reviewed: remote.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-TUI-002", "SRS-TUI-009", "SRS-STATE-001"]

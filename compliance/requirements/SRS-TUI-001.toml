@@ -1,0 +1,13 @@
+id = "SRS-TUI-001"
+type = "requirement"
+title = "Read-only dashboard"
+status = "draft"
+release = "v0.6"
+text = """
+`ont-offload tui` shows the state from state.json, events.jsonl, cleanup-reports.jsonl and, when given, the daemon's log file, re-read every refresh interval (200 ms to 60 s, default 1 s). It never writes, locks, creates, signals or deletes anything, reads at most 1 MiB per file per refresh, and starts when the daemon, the share or the configuration's paths are missing.
+"""
+verification = "Unit: refresh with every write operation failing leaves the state folder unchanged; integration: the binary without a terminal creates nothing"
+
+[links]
+allocated_to = ["SWI-TUI", "SWI-CONFIG"]
+mitigates = ["HAZ-017"]
