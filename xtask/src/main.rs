@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 mod trace;
+mod verify_report;
 
 const USAGE: &str = "\
 cargo xtask <task> [options]
@@ -28,7 +29,10 @@ tasks:
   soup [--write]               SOUP items from Cargo.lock (medtrace)
   check-commits [RANGE]        Conventional Commits and Refs: trailers (cog + medtrace)
   set-version <X.Y.Z>          set the workspace version
-  ci                           lint, test, trace --strict, deny (as CI does)";
+  ci                           lint, test, trace --strict, deny (as CI does)
+  verify-report [options]      simulated runs offloaded end to end, checked by
+                               `report verify`; PDF evidence in target/verify-report
+                               (--help for options)";
 
 type Res = Result<(), String>;
 
@@ -63,6 +67,11 @@ fn main() -> ExitCode {
         "check-commits" => check_commits(&rest),
         "set-version" => set_version(&rest),
         "ci" => ci(),
+        "verify-report" if rest.iter().any(|a| *a == "--help" || *a == "-h") => {
+            println!("{}", verify_report::USAGE);
+            Ok(())
+        }
+        "verify-report" => verify_report::verify_report(&rest),
         "-h" | "--help" | "help" => {
             println!("{USAGE}");
             Ok(())
