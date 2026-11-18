@@ -4,9 +4,9 @@ title = "Completed runs kept under watch"
 status = "draft"
 release = "v0.4"
 text = """
-Keeps watching a completed run for transfer.watch_completed_for (default 24 h) with a cheap check of folder modification times; when a file is added or changed, removes COMPLETE and VERIFIED.json from the destination before anything else, logs a warning, offloads the run again and writes a new manifest and COMPLETE.
+Keeps watching a completed run for transfer.watch_completed_for (default 24 h) by comparing its folder modification times every scan and its full file fingerprint every source.full_rescan_every; when a file is added or changed, removes COMPLETE and then VERIFIED.json from the destination before anything else, records the reopening in the journal, raises a run_reopened event, offloads the run again and writes a new manifest and COMPLETE. `run` on a changed completed run does the same.
 """
-verification = "Simulator: file added an hour after COMPLETE; COMPLETE withdrawn before the first copy, new manifest matches"
+verification = "Fake-clock test: file added after COMPLETE (found by folder times) and file changed in place (found by the full check); COMPLETE and VERIFIED.json withdrawn before the first copy; new manifest matches"
 
 [links]
 allocated_to = ["SWI-SCHED", "SWI-RUN", "SWI-JOURNAL"]

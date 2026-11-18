@@ -4,10 +4,10 @@ title = "Bench"
 status = "draft"
 release = "v0.4"
 text = """
-bench measures write throughput per stream count and suggests workers and rate_limit values.
+bench refuses a share that fails the guard, writes test files to a hidden folder below dest_root with 1, 2, 4, 8 and 16 streams (or up to --max-streams) and then three chunk sizes, prints the throughput of each step, suggests workers (fewest streams within 90% of the best), rate_limit (80% of the best) and chunk_size (smallest within 5% of the best), records the measurement in state_dir/bench.json and removes its test files.
 """
-verification = "Integration on tempdir"
+verification = "Unit: suggestions from measurements are valid configuration; integration on tmpfs: measured, recorded, cleaned up; guard failure writes nothing"
 
 [links]
-allocated_to = ["SWI-CLI"]
+allocated_to = ["SWI-CLI", "SWI-GUARD"]
 mitigates = []

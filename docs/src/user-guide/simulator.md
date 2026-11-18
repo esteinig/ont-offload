@@ -24,7 +24,7 @@ ont-runsim clean --out /data/ont-runsim
 | `presets` | Lists the built-in presets (see below). |
 | `profile RUN -o profile.json` | Records the timeline of a finished real run from file metadata only (no content is read). |
 | `status [--json]` | Progress of the simulation in an output folder. |
-| `check --dest DIR` | Compares a copy with the manifest: missing, changed and extra files. Exit 1 on any difference. ont-offload's own `manifest.sha256`, `run.json`, `COMPLETE` and `VERIFIED.json` are ignored. |
+| `check --dest DIR` | Compares a copy with the manifest: missing, changed and extra files. Exit 1 on any difference. ont-offload's own `manifest.sha256`, `run.json`, `COMPLETE`, `VERIFIED.json` and `.ont-offload-claim.json` are ignored. |
 | `clean` | Removes only the run folders the simulator created (listed in `.ont-runsim/runs.txt` and labelled), then empty parent folders and its state folder. Anything else in the folder stays. |
 
 The output folder must be new, empty, or a previous simulator folder; the simulator refuses any other folder, and refuses to start while another simulation runs there.

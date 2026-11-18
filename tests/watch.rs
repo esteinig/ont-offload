@@ -42,8 +42,9 @@ impl Env {
             format!(
                 "dest_root = {:?}\ntarget_id = {TARGET:?}\nstate_dir = {:?}\n\
                  [guard]\nallowed_fstypes = [\"tmpfs\"]\n\
-                 [transfer]\nsettle = \"1s\"\nsettle_after_complete = \"2s\"\n\
+                 [transfer]\nmin_free = \"1MB\"\nsettle = \"1s\"\nsettle_after_complete = \"2s\"\n\
                  [bandwidth]\nworkers = 3\nrate_limit = \"200MB/s\"\n\
+                 [outage]\nsource_free_alert = \"0B\"\n\
                  [source]\nroot = {:?}\n",
                 share.path().to_str().expect("utf8"),
                 dir.path().join("state").to_str().expect("utf8"),
@@ -151,4 +152,69 @@ fn second_instance_on_the_same_state_folder_is_refused() {
         .assert()
         .code(2)
         .stderr(predicate::str::contains("another ont-offload"));
+}
+
+/// Verifies: SRS-STATE-001, SRS-STATE-002, SRS-CLI-001
+#[test]
+fn watch_publishes_state_that_status_prints() {
+    let Some(env) = Env::new() else { return };
+    let run = env.simulate();
+    let name = run
+        .strip_prefix(env.data())
+        .expect("below data")
+        .to_string_lossy()
+        .into_owned();
+    // Before the daemon ever ran: a clear error.
+    env.cmd()
+        .args(["status"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("is `ont-offload watch` running?"));
+    env.cmd().args(["watch", "--until-idle"]).assert().success();
+
+    let state = env.dir.path().join("state");
+    let snap: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(state.join("state.json")).expect("state.json"),
+    )
+    .expect("json");
+    assert_eq!(snap["schema"], "ont-offload/state/v1");
+    assert_eq!(snap["schema_version"], 1);
+    assert_eq!(snap["status"], "running");
+    assert_eq!(snap["destination"]["fstype"], "tmpfs");
+    assert_eq!(snap["destination"]["guard_ok"], true);
+    assert_eq!(snap["totals"]["completed_runs"], 1);
+    assert_eq!(snap["runs"][0]["phase"], "complete");
+    assert_eq!(snap["runs"][0]["name"], name.as_str());
+    assert_eq!(snap["rate"]["limit_bytes_per_s"], 200_000_000);
+    assert_eq!(snap["alerts"], serde_json::json!([]));
+
+    let events = std::fs::read_to_string(state.join("events.jsonl")).expect("events");
+    let kinds: Vec<String> = events
+        .lines()
+        .map(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).expect("event json");
+            v["kind"].as_str().expect("kind").to_owned()
+        })
+        .collect();
+    for k in [
+        "started",
+        "destination_ok",
+        "run_discovered",
+        "file_committed",
+        "run_state_changed",
+        "run_complete",
+    ] {
+        assert!(kinds.iter().any(|x| x == k), "{k} missing: {kinds:?}");
+    }
+
+    env.cmd().args(["status"]).assert().success().stdout(
+        predicate::str::contains("status: running")
+            .and(predicate::str::contains(name.as_str()))
+            .and(predicate::str::contains("complete"))
+            .and(predicate::str::contains("alerts: none")),
+    );
+    let out = env.cmd().args(["status", "--json"]).output().expect("run");
+    assert!(out.status.success());
+    let raw: serde_json::Value = serde_json::from_slice(&out.stdout).expect("json");
+    assert_eq!(raw["runs"][0]["run_id"], snap["runs"][0]["run_id"]);
 }

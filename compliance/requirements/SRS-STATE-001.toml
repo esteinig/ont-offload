@@ -4,10 +4,10 @@ title = "State snapshot"
 status = "draft"
 release = "v0.4"
 text = """
-Publishes a schema-valid state.json atomically at the configured interval.
+Publishes state.json, valid against schema/state-v1.json, by atomic replacement every state.interval (default 2 s): overall status, destination (guard result, file system type, free space, outage), source free space, workers with their current file and progress, rate limit and current speed, totals, every run being offloaded or watched with its phase, backlog, failed files, integrity mismatches, skipped entries and estimated time left, and the list of open alerts. `status` prints it and flags a snapshot older than three intervals (at least 30 s) as stale.
 """
-verification = "Integration + schema check"
+verification = "Unit: schema validation of snapshots, drift caught; fake-clock tests and the 24 h replay soak validate live snapshots; integration: watch then status and status --json"
 
 [links]
-allocated_to = ["SWI-STATE"]
+allocated_to = ["SWI-STATE", "SWI-SCHED", "SWI-CLI"]
 mitigates = ["HAZ-007", "HAZ-011"]

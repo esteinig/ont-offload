@@ -7,6 +7,8 @@ Wants=network-online.target
 [Service]
 Type=notify
 ExecStart=/usr/local/bin/ont-offload watch --config /etc/ont-offload/config.toml
+# Reload applies a changed rate_limit; other settings need a restart.
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=30
 # 75 = every worker stalled (e.g. hung hard mount); restart it.

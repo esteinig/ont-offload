@@ -4,9 +4,9 @@ title = "Bounded memory and journal size"
 status = "draft"
 release = "v0.4"
 text = """
-Drops a run's journal and file tracking from memory once it is complete (and, from v0.4, no longer watched), and compacts a completed run's journal to one record per file plus the completion record.
+Drops a run's journal, selection and file tracking from memory once it is complete, keeping only a fingerprint for the completed-run watch (SRS-LIVE-004), forgets it entirely when it is no longer watched, and compacts a completed run's journal to its claim, one record per file and the completion record.
 """
-verification = "Fake-clock test over 200 simulated runs: memory and journal size stay within set bounds; 72 h soak in v0.5"
+verification = "Fake-clock test: completed runs leave the live set, journals compacted, runs retired after the watch window and not watched after a restart; memory bound over 200 runs in the v0.5 72 h soak"
 
 [links]
 allocated_to = ["SWI-SCHED", "SWI-JOURNAL"]

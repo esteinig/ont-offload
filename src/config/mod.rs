@@ -67,6 +67,28 @@ pub struct RawConfig {
     /// `[logging]`
     #[serde(default)]
     pub logging: RawLogging,
+    /// `[state]`
+    #[serde(default)]
+    pub state: RawState,
+}
+
+/// `[state]` as written.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct RawState {
+    /// How often `state.json` is rewritten.
+    pub interval: String,
+    /// Size at which `events.jsonl` is rotated to `events.jsonl.1`.
+    pub events_max_size: String,
+}
+
+impl Default for RawState {
+    fn default() -> Self {
+        Self {
+            interval: "2s".into(),
+            events_max_size: "64MB".into(),
+        }
+    }
 }
 
 fn d_state_dir() -> String {
@@ -126,6 +148,8 @@ pub struct RawSource {
     pub complete_markers: Vec<String>,
     /// Patterns (relative to the root) never treated as runs.
     pub ignore: Vec<String>,
+    /// Full rescan interval; between full rescans only changed folders are listed.
+    pub full_rescan_every: String,
 }
 
 impl Default for RawSource {
@@ -136,6 +160,7 @@ impl Default for RawSource {
             run_markers: strings(&["sample_sheet_*.csv"]),
             complete_markers: strings(&["final_summary_*.txt"]),
             ignore: strings(&["lost+found", "**/.*", "ont-runsim"]),
+            full_rescan_every: "10m".into(),
         }
     }
 }
@@ -228,6 +253,8 @@ pub struct RawTransfer {
     pub preserve_mtime: bool,
     /// Octal permissions of copied files.
     pub file_mode: String,
+    /// How long a completed run is still watched for changes (`"0s"`: not at all).
+    pub watch_completed_for: String,
 }
 
 impl Default for RawTransfer {
@@ -243,6 +270,7 @@ impl Default for RawTransfer {
             min_free: "500GiB".into(),
             preserve_mtime: true,
             file_mode: "0640".into(),
+            watch_completed_for: "24h".into(),
         }
     }
 }
@@ -405,6 +433,17 @@ pub struct Source {
     pub complete_markers: Vec<String>,
     /// Ignored patterns.
     pub ignore: Vec<String>,
+    /// Full rescan interval.
+    pub full_rescan_every: Duration,
+}
+
+/// `[state]`, validated.
+#[derive(Debug, Clone, Copy)]
+pub struct StateCfg {
+    /// `state.json` rewrite interval.
+    pub interval: Duration,
+    /// `events.jsonl` rotation size in bytes.
+    pub events_max_size: u64,
 }
 
 /// `[selection]`, validated.
@@ -452,6 +491,8 @@ pub struct Transfer {
     pub preserve_mtime: bool,
     /// File permissions.
     pub file_mode: u32,
+    /// How long completed runs stay watched.
+    pub watch_completed_for: Duration,
 }
 
 /// `[outage]`, validated.
@@ -519,6 +560,8 @@ pub struct Config {
     pub log_file: Option<PathBuf>,
     /// Log format.
     pub log_format: LogFormat,
+    /// Live state settings.
+    pub state: StateCfg,
 }
 
 /// A validated configuration plus the warnings found on the way.
@@ -913,6 +956,31 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
         );
     }
     let min_free = c.size("transfer.min_free", &t.min_free);
+    let watch_completed_for = c.duration("transfer.watch_completed_for", &t.watch_completed_for);
+    let full_rescan_every = c.duration("source.full_rescan_every", &raw.source.full_rescan_every);
+    if full_rescan_every < Duration::from_secs(10)
+        && !c
+            .problems
+            .iter()
+            .any(|p| p.starts_with("source.full_rescan_every"))
+    {
+        c.problem("source.full_rescan_every", "must be at least 10s");
+    }
+    let state_interval = c.duration("state.interval", &raw.state.interval);
+    if state_interval < Duration::from_secs(1)
+        && !c.problems.iter().any(|p| p.starts_with("state.interval"))
+    {
+        c.problem("state.interval", "must be at least 1s");
+    }
+    let events_max_size = c.size("state.events_max_size", &raw.state.events_max_size);
+    if events_max_size < 1 << 20
+        && !c
+            .problems
+            .iter()
+            .any(|p| p.starts_with("state.events_max_size"))
+    {
+        c.problem("state.events_max_size", "must be at least 1MiB");
+    }
     let file_mode = match u32::from_str_radix(t.file_mode.trim_start_matches("0o"), 8) {
         Ok(m) if m <= 0o777 && m & 0o600 == 0o600 => m,
         Ok(m) if m <= 0o777 => {
@@ -1039,6 +1107,7 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
                 run_markers: raw.source.run_markers.clone(),
                 complete_markers: raw.source.complete_markers.clone(),
                 ignore: raw.source.ignore.clone(),
+                full_rescan_every,
             },
             selection: Selection {
                 include: raw.selection.include.clone(),
@@ -1061,6 +1130,7 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
                 min_free,
                 preserve_mtime: t.preserve_mtime,
                 file_mode,
+                watch_completed_for,
             },
             outage: Outage {
                 check_every_max,
@@ -1082,6 +1152,10 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
             allowed_fstypes: raw.guard.allowed_fstypes.clone(),
             log_file,
             log_format: raw.logging.format,
+            state: StateCfg {
+                interval: state_interval,
+                events_max_size,
+            },
         },
         warnings: c.warnings,
     })

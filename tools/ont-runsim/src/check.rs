@@ -12,7 +12,13 @@ use sha2::{Digest, Sha256};
 use crate::{Error, Result, io_err};
 
 /// Files ont-offload itself adds at the top of a destination run folder.
-pub const OFFLOAD_FILES: &[&str] = &["manifest.sha256", "run.json", "COMPLETE", "VERIFIED.json"];
+pub const OFFLOAD_FILES: &[&str] = &[
+    "manifest.sha256",
+    "run.json",
+    "COMPLETE",
+    "VERIFIED.json",
+    ".ont-offload-claim.json",
+];
 
 /// Result of a comparison.
 #[derive(Debug, Clone, Default, Serialize)]

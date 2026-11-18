@@ -4,10 +4,10 @@ title = "Destination claim on the share"
 status = "draft"
 release = "v0.4"
 text = """
-Before the first file of a run is written, writes a claim file (.ont-offload-claim.json: target_id, host, source path, run id) into the destination run folder with create-new semantics, and refuses the run when the folder holds a claim for a different source, whichever host or state folder made it. ont-offload's own files in the destination folder are listed in run.json and ignored by verify.
+Before the first file of a run is written, writes a claim file (.ont-offload-claim.json: target_id, host, source path, run id) into the destination run folder with create-new semantics, and refuses the run when the folder holds a claim for a different source, whichever host or state folder made it; the run is reported as failed and nothing of it is written. The claim file is a reserved name, ignored by verify and by ont-runsim check.
 """
-verification = "Two controllers with separate state folders on one share; claim from another host; integration on the nightly shares"
+verification = "Fake-clock test: second controller with its own source and state folder refused, first copy untouched; run refuses the same; nightly real shares"
 
 [links]
-allocated_to = ["SWI-JOURNAL", "SWI-RUN"]
+allocated_to = ["SWI-JOURNAL", "SWI-RUN", "SWI-SCHED"]
 mitigates = ["HAZ-010"]

@@ -8,6 +8,7 @@ severity = "serious"
 probability_before = "remote"
 # Known limitation (v0.3), documented in the user guide under "Known limitations".
 # v0.3: late files within settle_after_complete are caught (SRS-LIVE-003); later ones only at the next start, which re-offloads a changed run (SRS-RES-004). SRS-LIVE-004 (v0.4) keeps watching completed runs and withdraws COMPLETE first.
+# v0.4: SRS-LIVE-004 implemented and verified (added and in-place changed files; COMPLETE withdrawn first). Remaining exposure: a change after watch_completed_for is picked up only at the next start. Proposed residual probability once reviewed: improbable.
 # Residual probability is set when the risk controls are verified.
 probability_after = ""
 

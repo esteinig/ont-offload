@@ -8,6 +8,7 @@ severity = "minor"
 probability_before = "occasional"
 # Known limitation (v0.3), documented in the user guide under "Known limitations".
 # v0.3: bounded only by restarts; the watchdog and stall exit restart a hung daemon (SRS-RES-003) and restarts resume (SRS-RES-004). SRS-RES-008 and SRS-RES-009 (v0.4) bound memory, journal size and scan cost; the v0.5 72 h soak checks them.
+# v0.4: SRS-RES-008 and SRS-RES-009 implemented and verified on the fake clock; the 72 h soak with memory and scan-time bounds follows in v0.5. Proposed residual probability once reviewed: remote.
 # Residual probability is set when the risk controls are verified.
 probability_after = ""
 

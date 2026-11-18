@@ -116,8 +116,18 @@ pub enum Command {
     },
     /// Validate configuration, paths, run detection and the destination guard without copying.
     CheckConfig,
-    /// Measure the share and suggest workers and `rate_limit`.
-    Bench,
+    /// Measure the share and suggest workers, `rate_limit` and `chunk_size`.
+    Bench {
+        /// Data written per step, split over the streams.
+        #[arg(long, default_value = "2GB")]
+        size: String,
+        /// Largest number of parallel streams to try (1, 2, 4, ... up to this).
+        #[arg(long, default_value_t = 16)]
+        max_streams: usize,
+        /// Skip the chunk-size steps.
+        #[arg(long)]
+        no_chunks: bool,
+    },
     /// Delete source runs that pass every deletion gate.
     Cleanup {
         /// Report only; delete nothing.
@@ -138,7 +148,7 @@ impl Command {
             Self::Verify { .. } => "verify",
             Self::Status { .. } => "status",
             Self::CheckConfig => "check-config",
-            Self::Bench => "bench",
+            Self::Bench { .. } => "bench",
             Self::Cleanup { .. } => "cleanup",
         }
     }
@@ -150,7 +160,7 @@ impl Command {
             Self::CheckConfig => "v0.1",
             Self::Run { .. } | Self::Verify { .. } => "v0.2",
             Self::Watch { .. } => "v0.3",
-            Self::Status { .. } | Self::Bench => "v0.4",
+            Self::Status { .. } | Self::Bench { .. } => "v0.4",
             Self::Cleanup { .. } => "v0.5",
         }
     }
@@ -178,6 +188,15 @@ mod tests {
             vec!["ont-offload", "status", "--json"],
             vec!["ont-offload", "check-config"],
             vec!["ont-offload", "bench"],
+            vec![
+                "ont-offload",
+                "bench",
+                "--size",
+                "1GB",
+                "--max-streams",
+                "8",
+                "--no-chunks",
+            ],
             vec!["ont-offload", "cleanup", "--dry-run"],
         ] {
             assert!(Cli::try_parse_from(&args).is_ok(), "{args:?}");

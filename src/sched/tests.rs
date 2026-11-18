@@ -26,6 +26,8 @@ use crate::fsio::faulty::{Fault, FaultyFs, Op, Rule};
 use crate::fsio::{RealFs, errno};
 use crate::guard::{Guard, SENTINEL};
 use crate::journal::COMPLETE;
+use crate::state::Kind;
+use crate::state::schema_check::{load, validate};
 
 const TARGET: &str = "lab-share-01";
 
@@ -297,6 +299,18 @@ impl Env {
     }
 
     fn cfg(&self, extra_top: &str, extra: &str) -> Config {
+        // Test file systems are far smaller than the default min_free.
+        let extra = if extra.contains("[transfer]") {
+            extra.replace("[transfer]", "[transfer]\nmin_free = \"1MB\"")
+        } else {
+            format!("{extra}\n[transfer]\nmin_free = \"1MB\"\n")
+        };
+        // Nor do they have the default source_free_alert to spare.
+        let extra = if extra.contains("[outage]") {
+            extra
+        } else {
+            format!("{extra}\n[outage]\nsource_free_alert = \"0B\"\n")
+        };
         let path = self.dir.path().join("config.toml");
         std::fs::write(
             &path,
@@ -323,6 +337,7 @@ impl Env {
                 probe_timeout: s(30),
                 tick: Duration::from_millis(10),
                 until_idle: false,
+                online_check_every: s(60),
             },
             Notifier::default(),
         )
@@ -357,6 +372,40 @@ impl Env {
         .unwrap();
         let theirs = ont_runsim::check::read_manifest(&manifest).unwrap();
         assert_eq!(ours, theirs);
+    }
+}
+
+impl Env {
+    /// As [`Env::matches_simulator`], for a run changed after the simulator
+    /// wrote its manifest: `added` files are extra, `changed` files differ;
+    /// both must be in our manifest with their current digest.
+    fn matches_simulator_except(&self, run: &Path, added: &[&str], changed: &[&PathBuf]) {
+        let manifest = ont_runsim::status::manifests_dir(&self.p("data")).join(format!(
+            "{}.sha256",
+            run.file_name().unwrap().to_string_lossy()
+        ));
+        let rep = ont_runsim::check::check(&self.dest_of(run), &manifest, &[]).unwrap();
+        let changed_rel: Vec<String> = changed
+            .iter()
+            .map(|p| p.strip_prefix(run).unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert!(rep.missing.is_empty(), "{rep:?}");
+        let mut extra = rep.extra.clone();
+        extra.sort();
+        let mut want: Vec<String> = added.iter().map(|s| (*s).to_owned()).collect();
+        want.sort();
+        assert_eq!(extra, want, "{rep:?}");
+        let mut got = rep.changed.clone();
+        got.sort();
+        assert_eq!(got, changed_rel, "{rep:?}");
+        let ours = crate::journal::parse_manifest(
+            &std::fs::read_to_string(self.dest_of(run).join("manifest.sha256")).unwrap(),
+        )
+        .unwrap();
+        for rel in added.iter().map(|s| (*s).to_owned()).chain(changed_rel) {
+            let (_, sha) = crate::copy::hash_file(&RealFs, &run.join(&rel), 1 << 20).unwrap();
+            assert_eq!(ours.get(&rel), Some(&sha), "{rel}");
+        }
     }
 }
 
@@ -692,4 +741,481 @@ fn restart_resumes_from_the_journal_and_completed_runs_are_left_alone() {
     }
     assert_eq!(w.stats.committed, 0);
     assert!(w.idle());
+}
+
+// ---------------------------------------------------------------------------
+// v0.4: live state, share claims, fairness, completed runs, bounds
+// ---------------------------------------------------------------------------
+
+fn events(env: &Env) -> Vec<crate::state::Event> {
+    std::fs::read_to_string(env.p("state").join(crate::state::EVENTS_FILE))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+fn kinds(env: &Env) -> Vec<Kind> {
+    events(env).iter().map(|e| e.kind).collect()
+}
+
+/// Step the controller alone (the source does not change) from `from` to
+/// `to` in steps of `step` simulated seconds.
+fn steps(env: &Env, w: &mut Watcher, from: u64, to: u64, step: u64) {
+    let mut t = from;
+    while t <= to {
+        env.clock.set(s(t));
+        w.step(s(t)).unwrap();
+        w.quiesce(s(t), s(20)).unwrap();
+        t += step;
+    }
+}
+
+fn assert_schema_valid(w: &mut Watcher, env: &Env, now: Duration) {
+    let state = load("state-v1.json");
+    let snap = serde_json::to_value(w.snapshot(now)).unwrap();
+    assert_eq!(validate(&state, &snap), Vec::<String>::new(), "{snap:#}");
+    let event = load("event-v1.json");
+    for e in events(env) {
+        let v = serde_json::to_value(&e).unwrap();
+        assert_eq!(validate(&event, &v), Vec::<String>::new(), "{v}");
+    }
+}
+
+/// Verifies: SRS-SEL-008, SRS-STATE-002
+#[test]
+fn a_second_instance_cannot_write_into_a_run_claimed_on_the_share() {
+    let env = Env::new();
+    let run = one_completed_run(&env);
+    let mut a = env.watcher(env.cfg("", ""));
+    steps(&env, &mut a, 0, 1200, 30);
+    assert_eq!(a.stats.completed_runs, 1);
+    let claim = env.dest_of(&run).join(crate::journal::SHARE_CLAIM);
+    let body: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&claim).unwrap()).unwrap();
+    assert_eq!(body["source"], run.to_str().unwrap());
+    assert_eq!(body["target_id"], TARGET);
+    env.matches_simulator(&run);
+
+    // A second sequencer (other source root, other state folder) with a run
+    // of the same name, mapped to the same destination folder.
+    let rel = run.strip_prefix(env.p("data")).unwrap().to_path_buf();
+    let other = env.p("data2").join(&rel);
+    std::fs::create_dir_all(other.parent().unwrap()).unwrap();
+    let status = std::process::Command::new("cp")
+        .args(["-a", run.to_str().unwrap(), other.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let victim = std::fs::read_dir(&other)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.is_file() && p.to_string_lossy().contains("final_summary"))
+        .unwrap();
+    std::fs::write(&victim, b"another run entirely\n").unwrap();
+    std::fs::create_dir_all(env.p("state2")).unwrap();
+    let cfg_path = env.dir.path().join("config.toml");
+    let text = std::fs::read_to_string(&cfg_path)
+        .unwrap()
+        .replace(
+            env.p("state").to_str().unwrap(),
+            env.p("state2").to_str().unwrap(),
+        )
+        .replace(
+            &format!("root = {:?}", env.p("data").to_str().unwrap()),
+            &format!("root = {:?}", env.p("data2").to_str().unwrap()),
+        );
+    let cfg_path2 = env.dir.path().join("config2.toml");
+    std::fs::write(&cfg_path2, text).unwrap();
+    let cfg2 = config::load(&cfg_path2, &env.fs).unwrap().config;
+    let before = std::fs::read(env.dest_of(&run).join(victim.file_name().unwrap())).unwrap();
+    let mut b = env.watcher(cfg2.clone());
+    steps(&env, &mut b, 0, 1200, 30);
+    assert_eq!(b.stats.failed_runs, 1, "{:?}", b.stats);
+    assert_eq!(b.stats.committed, 0);
+    assert_eq!(
+        std::fs::read(env.dest_of(&run).join(victim.file_name().unwrap())).unwrap(),
+        before,
+        "the first run's copy was changed"
+    );
+    let snap = b.snapshot(s(1200));
+    assert!(
+        snap.alerts
+            .iter()
+            .any(|a| a.kind == Kind::RunFailed && a.message.contains("claimed on the share")),
+        "{:?}",
+        snap.alerts
+    );
+    assert!(snap.runs.iter().any(|r| r.phase == "failed"));
+    // `run` refuses too.
+    let guard = Guard::new(&cfg2).with_mountinfo(&env.mountinfo);
+    let det = crate::run::detect(&cfg2, &env.fs).unwrap();
+    let err = crate::run::offload(&cfg2, &env.fs, &guard, &det.runs[0], true).unwrap_err();
+    assert!(err.to_string().contains("claimed on the share"), "{err}");
+}
+
+/// Verifies: SRS-PAR-003, SRS-STATE-001
+#[test]
+fn workers_are_shared_across_runs_in_turn() {
+    let env = Env::new();
+    let mut engine = env.engine(
+        "seed = 3\nhours = 1\n[fake]\nsize_scale = 0.0001\n\
+         [[runs]]\nexperiment = \"a\"\nsample = \"big\"\n\
+         [[runs]]\nexperiment = \"b\"\nsample = \"small\"\n",
+    );
+    let mut t = 0.0;
+    while !engine.done() {
+        engine.advance_to(t).unwrap();
+        t += 300.0;
+    }
+    engine.write_manifests().unwrap();
+    let mut w = env.watcher(env.cfg("", "[bandwidth]\nworkers = 1\n"));
+    steps(&env, &mut w, 0, 3600, 10);
+    let commits: Vec<String> = events(&env)
+        .into_iter()
+        .filter(|e| e.kind == Kind::FileCommitted)
+        .map(|e| e.run.unwrap())
+        .collect();
+    let first: Vec<&String> = commits.iter().take(10).collect();
+    let a = first.iter().filter(|r| r.starts_with("a/")).count();
+    let b = first.iter().filter(|r| r.starts_with("b/")).count();
+    // Source-path order would give run "a" all ten.
+    assert!(a >= 4 && b >= 4, "first ten commits: {first:?}");
+    assert_eq!(w.stats.completed_runs, 2);
+    for r in engine.run_dirs() {
+        env.matches_simulator(&r);
+    }
+}
+
+/// Verifies: SRS-LIVE-004, SRS-STATE-002
+#[test]
+fn a_completed_run_that_changes_is_withdrawn_before_it_is_copied_again() {
+    let env = Env::new();
+    let run = one_completed_run(&env);
+    let mut w = env.watcher(env.cfg("", "full_rescan_every = \"1h\"\n"));
+    steps(&env, &mut w, 0, 1200, 30);
+    assert_eq!(w.stats.completed_runs, 1);
+    assert!(w.runs.is_empty());
+    assert_eq!(w.completed.len(), 1);
+    let dest = env.dest_of(&run);
+    std::fs::write(dest.join(crate::journal::VERIFIED), "{}").unwrap();
+    // Re-processing writes a new report into the completed run.
+    std::fs::create_dir_all(run.join("other_reports")).unwrap();
+    std::fs::write(run.join("other_reports/reprocessed.txt"), "new\n").unwrap();
+    steps(&env, &mut w, 1210, 1210, 10);
+    assert_eq!(w.stats.reopened_runs, 1);
+    assert!(!dest.join(COMPLETE).exists(), "COMPLETE still there");
+    assert!(!dest.join(crate::journal::VERIFIED).exists());
+    assert!(!dest.join("other_reports/reprocessed.txt").exists());
+    // After settling the run is complete again, with the new file.
+    steps(&env, &mut w, 1220, 2400, 30);
+    assert_eq!(w.stats.completed_runs, 2);
+    let manifest = std::fs::read_to_string(dest.join("manifest.sha256")).unwrap();
+    assert!(manifest.contains("other_reports/reprocessed.txt"));
+    let k = kinds(&env);
+    let reopened = k.iter().position(|k| *k == Kind::RunReopened).unwrap();
+    let complete: Vec<usize> = k
+        .iter()
+        .enumerate()
+        .filter(|(_, k)| **k == Kind::RunComplete)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(complete.len(), 2);
+    assert!(complete[0] < reopened && reopened < complete[1]);
+    // The journal says so too: Reopen before the new file's record.
+    let j = std::fs::read_to_string(
+        crate::journal::Journal::open(&env.fs, &env.p("state"), &run)
+            .unwrap()
+            .path(),
+    )
+    .unwrap();
+    // Compacted on completion: no Reopen left, one record per file.
+    assert!(!j.contains("\"reopen\""), "{j}");
+    // An in-place change (same folder times) is found by the periodic full check.
+    let pod5 = std::fs::read_dir(run.join("pod5"))
+        .map(|d| d.map(|e| e.unwrap().path()).next().unwrap())
+        .unwrap();
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&pod5)
+        .unwrap();
+    std::io::Write::write_all(&mut f, b"more").unwrap();
+    drop(f);
+    steps(&env, &mut w, 2410, 2500, 30);
+    assert_eq!(w.stats.reopened_runs, 1, "noticed before the full check");
+    steps(&env, &mut w, 2510, 6000, 30);
+    assert_eq!(w.stats.reopened_runs, 2);
+    assert_eq!(w.stats.completed_runs, 3);
+    env.matches_simulator_except(&run, &["other_reports/reprocessed.txt"], &[&pod5]);
+}
+
+/// Verifies: SRS-RES-008, SRS-LIVE-004
+#[test]
+fn completed_runs_drop_their_file_lists_compact_their_journals_and_retire() {
+    let env = Env::new();
+    let mut engine = env.engine(
+        "seed = 5\nhours = 0.5\n[fake]\nsize_scale = 0.0001\n\
+         [[runs]]\nexperiment = \"e1\"\nsample = \"s\"\n[[runs]]\nexperiment = \"e2\"\nsample = \"s\"\n\
+         [[runs]]\nexperiment = \"e3\"\nsample = \"s\"\n[[runs]]\nexperiment = \"e4\"\nsample = \"s\"\n",
+    );
+    let mut w = env.watcher(env.cfg("", "[transfer]\nwatch_completed_for = \"1h\"\n"));
+    let total = engine.total_seconds() as u64;
+    drive(&env, &mut w, &mut engine, 0, total + 900, 20, |_, _| {});
+    finish(&env, &mut engine);
+    assert_eq!(w.stats.completed_runs, 4);
+    assert!(w.runs.is_empty(), "file lists kept after completion");
+    assert_eq!(w.completed.len(), 4);
+    for r in engine.run_dirs() {
+        env.matches_simulator(&r);
+        let j = crate::journal::Journal::open(&env.fs, &env.p("state"), &r).unwrap();
+        // Claim, one record per file, completion: rewrites and retries are gone.
+        assert_eq!(j.records(), j.files.len() + 2, "journal not compacted");
+    }
+    let snap = w.snapshot(s(total + 900));
+    assert_eq!(
+        snap.runs.iter().filter(|r| r.phase == "complete").count(),
+        4
+    );
+    steps(&env, &mut w, total + 1000, total + 1000 + 3700, 100);
+    assert!(w.completed.is_empty());
+    assert_eq!(w.stats.retired_runs, 4);
+    assert_eq!(
+        kinds(&env)
+            .iter()
+            .filter(|k| **k == Kind::RunRetired)
+            .count(),
+        4
+    );
+    assert!(w.snapshot(s(total + 5000)).runs.is_empty());
+    // A restart after the window does not watch them at all.
+    std::thread::sleep(Duration::from_millis(1100));
+    let mut w2 = env.watcher(env.cfg("", "[transfer]\nwatch_completed_for = \"1s\"\n"));
+    steps(&env, &mut w2, 0, 100, 10);
+    assert!(w2.completed.is_empty() && w2.runs.is_empty());
+    assert_eq!(w2.stats.committed, 0);
+}
+
+/// Verifies: SRS-RES-009
+#[test]
+fn rescans_list_only_folders_that_changed_and_miss_nothing() {
+    let env = Env::new();
+    let mut engine = env.engine(
+        "seed = 8\nhours = 2\n[fake]\nsize_scale = 0.0001\n[synthetic]\nbarcodes = 6\n\
+         [[runs]]\nexperiment = \"e\"\nsample = \"s\"\n",
+    );
+    engine.advance_to(3600.0).unwrap();
+    let run = engine.run_dirs()[0].clone();
+    let mut w = env.watcher(env.cfg("", "full_rescan_every = \"10m\"\n"));
+    steps(&env, &mut w, 0, 300, 10);
+    assert!(w.stats.committed > 0);
+    // Folder times must be older than the racy window before they are trusted.
+    std::thread::sleep(Duration::from_millis(2100));
+    steps(&env, &mut w, 310, 330, 10);
+    let dirs = crate::run::dir_signature(&env.fs, &run).unwrap().len() as u64;
+    let (l0, s0) = w.scan_work();
+    steps(&env, &mut w, 340, 340, 10);
+    let (l1, s1) = w.scan_work();
+    assert_eq!(l1 - l0, 0, "unchanged folders listed again");
+    assert!(
+        s1 - s0 <= dirs + w.backlog() as u64,
+        "{} status calls for {dirs} folders and {} waiting files",
+        s1 - s0,
+        w.backlog()
+    );
+    // A new file is found by listing only its folder.
+    std::fs::write(run.join("new_report.txt"), "x").unwrap();
+    steps(&env, &mut w, 350, 350, 10);
+    let (l2, _) = w.scan_work();
+    assert_eq!(l2 - l1, 1);
+    assert!(
+        w.runs
+            .values()
+            .any(|r| r.life.files.contains_key("new_report.txt"))
+    );
+    // Every full_rescan_every, everything is listed again.
+    steps(&env, &mut w, 360, 940, 10);
+    let (l3, _) = w.scan_work();
+    assert!(
+        l3 - l2 >= dirs,
+        "no full rescan: {} listings for {dirs} folders",
+        l3 - l2
+    );
+    // And the run still offloads exactly.
+    let until = engine.total_seconds() as u64 + 900;
+    drive(&env, &mut w, &mut engine, 950, until, 20, |_, _| {});
+    finish(&env, &mut engine);
+    assert_eq!(w.stats.completed_runs, 1);
+    env.matches_simulator_except(&run, &["new_report.txt"], &[]);
+}
+
+/// Verifies: SRS-RES-010, SRS-STATE-002
+#[test]
+fn share_below_min_free_pauses_writes_until_space_returns() {
+    let env = Env::new();
+    let run = one_completed_run(&env);
+    env.fs
+        .add(Rule::always(Op::FreeSpace, "/share", Fault::Free(500_000)));
+    let mut w = env.watcher(env.cfg("", ""));
+    steps(&env, &mut w, 0, 300, 10);
+    assert!(w.is_down());
+    assert_eq!(w.stats.committed, 0);
+    assert!(
+        !env.dest_of(&run).exists() || std::fs::read_dir(env.dest_of(&run)).unwrap().count() == 0
+    );
+    let snap = w.snapshot(s(300));
+    assert_eq!(snap.destination.free_bytes, Some(500_000));
+    assert!(snap.alerts.iter().any(|a| a.kind == Kind::CapacityLow));
+    assert_schema_valid(&mut w, &env, s(300));
+    env.fs.clear();
+    env.base_rules();
+    steps(&env, &mut w, 310, 1800, 30);
+    assert!(!w.is_down());
+    assert_eq!(w.stats.completed_runs, 1);
+    let k = kinds(&env);
+    assert!(
+        k.contains(&Kind::CapacityLow) && k.contains(&Kind::CapacityOk),
+        "{k:?}"
+    );
+    let left = w.snapshot(s(1800)).alerts;
+    assert!(left.is_empty(), "{left:?}");
+    env.matches_simulator(&run);
+}
+
+/// Verifies: SRS-STATE-003
+#[test]
+fn low_source_space_raises_an_alert_and_clears() {
+    let env = Env::new();
+    one_completed_run(&env);
+    env.fs
+        .add(Rule::always(Op::FreeSpace, "/data", Fault::Free(1_000_000)));
+    let mut w = env.watcher(env.cfg("", "[outage]\nsource_free_alert = \"1GB\"\n"));
+    steps(&env, &mut w, 0, 60, 10);
+    let snap = w.snapshot(s(60));
+    assert_eq!(snap.source_free_bytes, Some(1_000_000));
+    assert!(
+        snap.alerts.iter().any(|a| a.kind == Kind::SourceSpaceLow),
+        "{:?}",
+        snap.alerts
+    );
+    env.fs.clear();
+    env.base_rules();
+    steps(&env, &mut w, 70, 120, 10);
+    assert!(
+        !w.snapshot(s(120))
+            .alerts
+            .iter()
+            .any(|a| a.kind == Kind::SourceSpaceLow)
+    );
+    let k = kinds(&env);
+    assert_eq!(k.iter().filter(|k| **k == Kind::SourceSpaceLow).count(), 1);
+    assert!(k.contains(&Kind::SourceSpaceOk));
+}
+
+/// Verifies: SRS-RATE-003
+#[test]
+fn rate_limit_changes_on_reload_and_a_bad_file_changes_nothing() {
+    let env = Env::new();
+    let cfg = env.cfg("", "[bandwidth]\nrate_limit = \"10MB/s\"\n");
+    let path = env.dir.path().join("config.toml");
+    let flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut w = env.watcher(cfg).with_reload(&path, Arc::clone(&flag));
+    assert_eq!(w.rate_limit(), Some(10_000_000));
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, text.replace("10MB/s", "20MB/s")).unwrap();
+    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    w.step(s(0)).unwrap();
+    assert_eq!(w.rate_limit(), Some(20_000_000));
+    assert!(!flag.load(std::sync::atomic::Ordering::SeqCst));
+    std::fs::write(&path, text.replace("10MB/s", "fast")).unwrap();
+    w.reload_now(&path);
+    assert_eq!(w.rate_limit(), Some(20_000_000));
+    let snap = w.snapshot(s(1));
+    assert_eq!(snap.rate.limit_bytes_per_s, Some(20_000_000));
+}
+
+/// A seed run outside the source tree, for replayed content.
+fn seed_run(env: &Env) -> PathBuf {
+    let sc = ont_runsim::scenario::Scenario::from_toml(
+        "seed = 77\nhours = 0.5\n[fake]\nsize_scale = 0.0001\n[[runs]]\nexperiment = \"seed\"\nsample = \"s\"\n",
+        None,
+    )
+    .unwrap();
+    let out = env.p("seed");
+    ont_runsim::engine::prepare_out(&out).unwrap();
+    let plans = ont_runsim::plan::build(&sc, SystemTime::UNIX_EPOCH).unwrap();
+    let mut e = ont_runsim::engine::Engine::new(&out, plans).unwrap();
+    let mut t = 0.0;
+    while !e.done() {
+        e.advance_to(t).unwrap();
+        t += 300.0;
+    }
+    e.run_dirs()[0].clone()
+}
+
+/// The v0.4 acceptance soak on the fake clock: 24 h of replayed content in
+/// two overlapping runs, with an outage, an error burst and the state file
+/// checked against the schema throughout.
+///
+/// Verifies: SRS-LIVE-001, SRS-LIVE-003, SRS-PAR-003, SRS-RES-002, SRS-RES-008, SRS-RES-009, SRS-STATE-001, SRS-STATE-002, SRS-STATE-003
+#[test]
+fn replay_soak_24h_offloads_exactly_with_valid_state() {
+    let env = Env::new();
+    let seed = seed_run(&env);
+    let mut engine = env.engine(&format!(
+        "seed = 24\nhours = 24\ncontent = \"replay\"\n[fake]\nsize_scale = 0.0001\n[replay]\nrun = {:?}\n\
+         [synthetic]\nbatch_every = \"30m\"\n\
+         [faults]\nrewrite_closed = 2\nlate_files = 1\n\
+         [[runs]]\nexperiment = \"soak\"\nsample = \"a\"\n\
+         [[runs]]\nexperiment = \"soak\"\nsample = \"b\"\nstart_after = \"6h\"\n",
+        seed.to_str().unwrap()
+    ));
+    let mut w = env.watcher(env.cfg("", "[bandwidth]\nworkers = 3\n"));
+    let total = engine.total_seconds() as u64;
+    let fs = env.fs.clone();
+    let mut checked = 0;
+    drive(&env, &mut w, &mut engine, 0, total + 1800, 60, |t, w| {
+        match t {
+            // A 2 h outage in the night.
+            36_000 => fs.add(Rule::always(
+                Op::Any,
+                "/share",
+                Fault::Errno(errno::ENOTCONN),
+            )),
+            43_200 => {
+                fs.clear();
+                env.base_rules();
+            }
+            60_000 => fs.add(Rule::times(
+                Op::Write,
+                "/share",
+                Fault::Errno(errno::EIO),
+                3,
+            )),
+            _ => {}
+        }
+        if t % 7200 == 0 {
+            assert_schema_valid(w, &env, s(t));
+            checked += 1;
+        }
+    });
+    finish(&env, &mut engine);
+    assert!(checked >= 12);
+    assert_eq!(w.stats.failed_files, 0, "{:?}", w.stats);
+    assert_eq!(w.stats.completed_runs, 2);
+    assert!(w.stats.outages >= 1);
+    for r in engine.run_dirs() {
+        env.matches_simulator(&r);
+    }
+    let k = kinds(&env);
+    for want in [
+        Kind::OutageStarted,
+        Kind::OutageWarning,
+        Kind::OutageAlert,
+        Kind::OutageEnded,
+        Kind::Paused,
+        Kind::Resumed,
+    ] {
+        assert!(k.contains(&want), "{want:?} missing");
+    }
+    assert_schema_valid(&mut w, &env, s(total + 1800));
 }

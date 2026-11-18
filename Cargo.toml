@@ -71,6 +71,11 @@ sha2 = "0.10"
 thiserror = "2"
 toml = { version = "0.8", default-features = false, features = ["parse"] }
 
+# Free space (statvfs) on the source and the share; already used by ont-runsim.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", features = ["fs"] }
+signal-hook = { version = "0.3", default-features = false }
+
 [dev-dependencies]
 assert_cmd = "2"
 ont-runsim = { path = "tools/ont-runsim" }

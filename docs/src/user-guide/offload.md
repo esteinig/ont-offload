@@ -20,6 +20,8 @@ ont-offload run /data/exp1/s1/20261113_1200_1A_PAW00001_abcd1234
 
 The run needs its complete marker (`final_summary_*.txt` by default). For a run that finished without one, add `--completed`.
 
+Before the first file, ont-offload writes `.ont-offload-claim.json` (target, host, source run, run id) into the destination run folder. A folder already claimed by a different source run, from any host or configuration, is refused and nothing is written (see [below](#where-a-run-goes-dest_starts_at)).
+
 For every file, ont-offload:
 
 1. streams it from the source into a hidden temp file (`.<name>.ontoff-<nonce>.partial`) next to its final name, hashing every byte with SHA-256 and re-reading the share's sentinel after every chunk;
@@ -27,7 +29,9 @@ For every file, ont-offload:
 3. re-runs the full destination guard and renames the temp file to the final name;
 4. records the file in its journal under `state_dir`.
 
-When every file is in, it checks every size once more and writes, in this order, `manifest.sha256`, `run.json` and `COMPLETE`. A run folder on the share without `COMPLETE` is not finished.
+When every file is in, it checks every size once more and writes, in this order, `manifest.sha256`, `run.json` and `COMPLETE`. A run folder on the share without `COMPLETE` is not finished. The run's journal is then compacted to one line per file.
+
+If a run was completed before and its files changed since, `COMPLETE` and `VERIFIED.json` are removed from the share first, then the run is offloaded again (only new and changed files are copied) with a new manifest.
 
 `manifest.sha256` can be checked with standard tools on the storage side:
 
@@ -48,7 +52,7 @@ MinKNOW writes runs as `<experiment>/<sample>/<run>`. `dest_starts_at` chooses t
 | `sample` | `dest_root/s1/RUN` |
 | `run` | `dest_root/RUN` |
 
-With `sample` or `run`, two runs can map to the same folder (two experiments with a sample of the same name, for example). Each destination run folder is claimed by one source run in `state_dir`; a second run that maps to a claimed folder fails before anything is written. Changing `dest_starts_at` for a run that was already started is refused.
+With `sample` or `run`, two runs can map to the same folder (two experiments with a sample of the same name, for example). Each destination run folder is claimed by one source run, both in `state_dir` and, since v0.4, by the claim file on the share itself; a second run that maps to a claimed folder fails before anything is written, even from another sequencer or another configuration. Changing `dest_starts_at` for a run that was already started is refused.
 
 ## Interruptions and failures
 

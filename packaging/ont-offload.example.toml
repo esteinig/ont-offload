@@ -12,6 +12,8 @@ layout = "minknow"               # or "any-depth"
 run_markers = ["sample_sheet_*.csv"]   # a pattern ending in "/" matches a folder, e.g. "pod5/"
 complete_markers = ["final_summary_*.txt"]
 ignore = ["lost+found", "**/.*", "ont-runsim"]
+# Between full listings, rescans list only folders that changed.
+full_rescan_every = "10m"
 
 [selection]
 include = ["**"]
@@ -19,9 +21,11 @@ exclude = ["**/.*", "**/*.tmp"]
 defer_until_complete = ["sequencing_summary_*.txt", "other_reports/**"]
 
 [bandwidth]
+# Start here, then run `ont-offload bench` once and use its suggestions.
 # How many files are copied at the same time.
 workers = 4
 # Maximum total transfer speed for all workers together, e.g. "100MB/s" or "800Mbit/s".
+# Changes take effect on `systemctl reload ont-offload`, without a restart.
 rate_limit = "100MB/s"
 # Optional: your network connection speed; used only to check rate_limit.
 network_speed = "1Gbit/s"
@@ -34,7 +38,11 @@ settle = "30s"
 settle_after_complete = "5m"
 stall_timeout = "120s"
 max_attempts = 3
+# Copying pauses (with an alert) rather than leave less than this free on the share.
 min_free = "500GiB"
+# A completed run is watched this long; if it changes, COMPLETE is withdrawn
+# and the run is offloaded again.
+watch_completed_for = "24h"
 preserve_mtime = true
 file_mode = "0640"
 
@@ -46,7 +54,15 @@ remind_every = "1h"
 log_every = "15m"
 stable_before_resume = "60s"
 source_free_alert = "200GB"
+# Program and arguments (no shell) run for every event that needs a person,
+# with the event as JSON on stdin, e.g. "/usr/local/bin/ont-offload-notify".
 notify_command = ""
+
+[state]
+# state_dir/state.json is rewritten this often; `ont-offload status` reads it.
+interval = "2s"
+# state_dir/events.jsonl is rotated to events.jsonl.1 at this size.
+events_max_size = "64MB"
 
 [cleanup]
 delete = "off"                   # "off", "dry-run" or "on"

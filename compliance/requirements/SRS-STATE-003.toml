@@ -4,10 +4,10 @@ title = "Outage state"
 status = "draft"
 release = "v0.4"
 text = """
-Reports outage start, duration, reason, level, next check, backlog and source free space in state, emits outage events, and runs notify_command for each if set.
+Reports outage start, duration, reason, level, checks, next check, backlog (files and bytes), stuck workers and source free space in state; raises an alert when source free space falls below outage.source_free_alert; emits outage events; and runs outage.notify_command (no shell, killed after 60 s) for every event that needs a person, with the event as JSON on stdin and in ONT_OFFLOAD_EVENT_JSON.
 """
-verification = "Integration + schema check"
+verification = "Unit: notify_command receives alerting events only; fake-clock tests: outage and source-space alerts in state and events"
 
 [links]
-allocated_to = ["SWI-STATE"]
+allocated_to = ["SWI-STATE", "SWI-SCHED"]
 mitigates = ["HAZ-007"]

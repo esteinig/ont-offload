@@ -28,4 +28,4 @@ sudo systemctl enable --now ont-offload
 systemctl status ont-offload     # status line: runs, backlog, outage
 ```
 
-The service runs `ont-offload watch`; see [Running the daemon](watch.md). Configuration changes need `sudo systemctl restart ont-offload`.
+The service runs `ont-offload watch`; see [Running the daemon](watch.md). `sudo systemctl reload ont-offload` applies a changed `rate_limit`; other configuration changes need `sudo systemctl restart ont-offload`. `ont-offload status` shows the live state, and `ont-offload bench` suggests `workers`, `rate_limit` and `chunk_size` for the site's share ([Tuning with bench](watch.md#tuning-with-bench)).
