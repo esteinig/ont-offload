@@ -8,7 +8,7 @@
 | `ont-offload status [--json]` | Print the live state that `watch` keeps in `state_dir/state.json`; see [Live state and status](watch.md#live-state-and-status) | v0.4 |
 | `ont-offload check-config` | Validate config and paths, print the effective settings, the detected runs with their destination folders, and the destination guard result | v0.1 |
 | `ont-offload bench [--size 2GB] [--max-streams 16] [--no-chunks]` | Measure the share; suggest `workers`, `rate_limit` and `chunk_size`, recorded in `state_dir/bench.json`; see [Tuning with bench](watch.md#tuning-with-bench) | v0.4 |
-| `ont-offload cleanup [--dry-run] [<run>]` | Gated deletion of offloaded source runs | v0.5 |
+| `ont-offload cleanup [--dry-run] [<run>]` | Gated deletion of offloaded source runs; see [Deleting offloaded runs](cleanup.md) | v0.5 |
 
 Global options: `--config`, `--log-level`, `--log-file`, `--log-format text|json`.
 

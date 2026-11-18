@@ -32,7 +32,11 @@
         "outage_ended",
         "worker_stalled",
         "source_space_low",
-        "source_space_ok"
+        "source_space_ok",
+        "run_deleted",
+        "deletion_dry_run",
+        "deletion_refused",
+        "deletion_stopped"
       ],
       "description": "Event kind, as in events.jsonl."
     },
@@ -538,7 +542,8 @@
         "failed_runs",
         "reopened_runs",
         "outages",
-        "stalls"
+        "stalls",
+        "deleted_runs"
       ],
       "properties": {
         "committed_files": {
@@ -580,6 +585,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Stalls."
+        },
+        "deleted_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Source runs deleted by cleanup."
         }
       }
     },
@@ -593,6 +603,97 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/alert"
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "Source cleanup. Absent when cleanup.delete is \"off\".",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "gate",
+        "running",
+        "last_pass_at",
+        "next_pass_s",
+        "deleted_runs",
+        "deleted_bytes",
+        "would_delete",
+        "held",
+        "waiting",
+        "refused",
+        "stopped"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "dry-run",
+            "delete"
+          ],
+          "description": "Whether passes delete or only report."
+        },
+        "gate": {
+          "type": "string",
+          "enum": [
+            "storage-verify",
+            "readback",
+            "both"
+          ],
+          "description": "Content proof required before deletion."
+        },
+        "running": {
+          "type": "boolean",
+          "description": "A pass is running."
+        },
+        "last_pass_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "When the last pass ended (null before the first)."
+        },
+        "next_pass_s": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds until the next pass."
+        },
+        "deleted_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs deleted in the last pass."
+        },
+        "deleted_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes deleted in the last pass."
+        },
+        "would_delete": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs that passed every gate in the last dry-run pass."
+        },
+        "held": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs that passed every gate but were held by only_when_free_below."
+        },
+        "waiting": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs waiting for a gate."
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Runs refused by a gate."
+        },
+        "stopped": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why the last pass stopped early, if it did."
+        }
       }
     }
   }

@@ -1058,6 +1058,20 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
             "\"readback\" and \"both\" need transfer.verify = \"readback\"",
         );
     }
+    if cl.delete != DeleteMode::Off {
+        {
+            let (after, watched) = (delete_after, watch_completed_for);
+            if after < watched {
+                c.warn(
+                    "cleanup.delete_after",
+                    format!(
+                        "is shorter than transfer.watch_completed_for ({}); runs are deleted only once no longer watched",
+                        humantime::format_duration(watched)
+                    ),
+                );
+            }
+        }
+    }
     match cl.delete {
         DeleteMode::On => c.warn(
             "cleanup.delete",

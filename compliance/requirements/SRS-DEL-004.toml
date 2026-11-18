@@ -4,10 +4,10 @@ title = "Stop on failure"
 status = "draft"
 release = "v0.5"
 text = """
-Stops deleting a run at the first failed check, raises an alert, and never deletes during an outage.
+Starts no pass while the share is unavailable and checks the guard, the destination size and the source size and time again before each file. Stops the pass at the first failure (guard, changed file, removal error), raising a deletion_stopped alert; a run refused by a gate is kept and raises one deletion_refused alert until the problem clears. The next pass resumes a partly deleted run.
 """
-verification = "Fault test: share drops mid-cleanup"
+verification = "Fault tests: share drops and removal fails mid-deletion, the next pass resumes; fake-clock watch test of alerts"
 
 [links]
-allocated_to = ["SWI-CLEANUP"]
+allocated_to = ["SWI-CLEANUP", "SWI-SCHED"]
 mitigates = ["HAZ-009"]

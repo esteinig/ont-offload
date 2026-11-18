@@ -1,0 +1,13 @@
+id = "SRS-DEL-006"
+type = "requirement"
+title = "Cleanup schedule and protection of watched runs"
+status = "draft"
+release = "v0.5"
+text = """
+watch runs a cleanup pass every hour (the first five minutes after start) on its own thread, never during an outage and never on a run it is offloading or still watching; the result is shown in state.json (cleanup) and as run_deleted events. A run being deleted or deleted is never offloaded again by watch or run; a run marker at the path of a deleted run raises a run_failed alert. `cleanup` by hand deletes only while holding the state folder lock, so it cannot run beside watch; a dry run by hand works beside watch without writing a report.
+"""
+verification = "Fake-clock watch tests: dry run then deletion after restart, watched runs left alone, reappearing run alerted; 72 h soak; integration through the binary"
+
+[links]
+allocated_to = ["SWI-CLEANUP", "SWI-SCHED", "SWI-CLI", "SWI-RUN"]
+mitigates = ["HAZ-009"]

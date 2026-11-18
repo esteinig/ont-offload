@@ -38,6 +38,8 @@ pub enum Op {
     Rename,
     /// [`Fs::remove_file`].
     RemoveFile,
+    /// [`Fs::remove_dir`].
+    RemoveDir,
     /// [`Fs::create_dir_all`].
     CreateDirAll,
     /// [`Fs::read_dir`].
@@ -275,6 +277,11 @@ impl Fs for FaultyFs {
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         self.check(Op::RemoveFile, path)?;
         self.inner.remove_file(path)
+    }
+
+    fn remove_dir(&self, path: &Path) -> io::Result<()> {
+        self.check(Op::RemoveDir, path)?;
+        self.inner.remove_dir(path)
     }
 
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {

@@ -65,6 +65,8 @@ interval = "2s"
 events_max_size = "64MB"
 
 [cleanup]
+# Delete source runs once a verified copy is on the share. Run "dry-run" for
+# two weeks and review state_dir/cleanup-reports.jsonl before "on".
 delete = "off"                   # "off", "dry-run" or "on"
 gate = "storage-verify"          # or "readback" or "both"
 delete_after = "7d"

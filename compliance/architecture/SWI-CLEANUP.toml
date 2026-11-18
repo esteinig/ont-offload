@@ -3,7 +3,7 @@ type = "software-item"
 title = "Gated source deletion"
 status = "draft"
 safety_class = "B"
-paths = ["src/cleanup.rs"]
+paths = ["src/cleanup.rs", "src/cleanup/"]
 description = """
-Deletes source runs only when every deletion gate passes. Risk control for HAZ-009.
+Deletes source runs only when every deletion gate passes (finished, share present, content proof, source unchanged); records every deleted file in deletions.jsonl before removing it, writes DELETED.json and reports every pass. Risk control for HAZ-009.
 """

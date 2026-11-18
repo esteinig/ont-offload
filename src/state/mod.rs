@@ -69,6 +69,39 @@ pub struct Snapshot {
     pub runs: Vec<RunState>,
     /// Conditions that need a person, oldest first.
     pub alerts: Vec<Alert>,
+    /// Source cleanup (absent when `cleanup.delete` is `off`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cleanup: Option<CleanupState>,
+}
+
+/// Source cleanup: the mode, the next pass and the last pass's result.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CleanupState {
+    /// `dry-run` or `delete`.
+    pub mode: String,
+    /// `storage-verify`, `readback` or `both`.
+    pub gate: String,
+    /// A pass is running.
+    pub running: bool,
+    /// When the last pass ended (`null` before the first).
+    pub last_pass_at: Option<String>,
+    /// Seconds until the next pass.
+    pub next_pass_s: u64,
+    /// Runs deleted in the last pass.
+    pub deleted_runs: u64,
+    /// Bytes deleted in the last pass.
+    pub deleted_bytes: u64,
+    /// Runs that passed every gate in the last dry-run pass.
+    pub would_delete: u64,
+    /// Runs that passed every gate but were held by `only_when_free_below`.
+    pub held: u64,
+    /// Runs waiting for a gate.
+    pub waiting: u64,
+    /// Runs refused by a gate (see the alerts).
+    pub refused: u64,
+    /// Why the last pass stopped early, if it did.
+    pub stopped: Option<String>,
 }
 
 /// Rate limit and current speed.
@@ -193,6 +226,8 @@ pub struct Totals {
     pub outages: u64,
     /// Stalls.
     pub stalls: u64,
+    /// Source runs deleted by cleanup.
+    pub deleted_runs: u64,
 }
 
 /// One run.
@@ -305,11 +340,19 @@ pub enum Kind {
     SourceSpaceLow,
     /// Free space on the source is above `source_free_alert` again.
     SourceSpaceOk,
+    /// A source run was deleted after passing every gate.
+    RunDeleted,
+    /// A dry-run cleanup pass: what would have been deleted.
+    DeletionDryRun,
+    /// A completed run failed a deletion gate and is kept.
+    DeletionRefused,
+    /// Deleting a source run stopped on an error; it resumes next pass.
+    DeletionStopped,
 }
 
 impl Kind {
     /// Every kind, in the order of the schema.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 30] = [
         Self::Started,
         Self::DestinationOk,
         Self::RunDiscovered,
@@ -336,6 +379,10 @@ impl Kind {
         Self::WorkerStalled,
         Self::SourceSpaceLow,
         Self::SourceSpaceOk,
+        Self::RunDeleted,
+        Self::DeletionDryRun,
+        Self::DeletionRefused,
+        Self::DeletionStopped,
     ];
 
     /// Events that need a person: `notify_command` runs for these.
@@ -358,6 +405,8 @@ impl Kind {
                 | Self::RunFailed
                 | Self::RunReopened
                 | Self::SourceSpaceLow
+                | Self::DeletionRefused
+                | Self::DeletionStopped
         )
     }
 
@@ -682,16 +731,38 @@ pub fn describe(snap: &Snapshot, now: std::time::SystemTime) -> String {
     let t = &snap.totals;
     let _ = writeln!(
         s,
-        "since start: {} file(s), {} committed; {} run(s) complete, {} reopened, {} failed; {} failed file(s); {} outage(s), {} stall(s)",
+        "since start: {} file(s), {} committed; {} run(s) complete, {} reopened, {} failed, {} deleted at the source; {} failed file(s); {} outage(s), {} stall(s)",
         t.committed_files,
         Bytes(t.committed_bytes),
         t.completed_runs,
         t.reopened_runs,
         t.failed_runs,
+        t.deleted_runs,
         t.failed_files,
         t.outages,
         t.stalls
     );
+    if let Some(c) = &snap.cleanup {
+        let _ = writeln!(
+            s,
+            "cleanup: {} (gate {}){}; last pass {}: {} deleted ({}), {} would be deleted, {} held, {} waiting, {} refused{}; next in {}",
+            c.mode,
+            c.gate,
+            if c.running { ", running" } else { "" },
+            c.last_pass_at.as_deref().unwrap_or("none yet"),
+            c.deleted_runs,
+            Bytes(c.deleted_bytes),
+            c.would_delete,
+            c.held,
+            c.waiting,
+            c.refused,
+            c.stopped
+                .as_deref()
+                .map(|w| format!("; STOPPED: {w}"))
+                .unwrap_or_default(),
+            human(Duration::from_secs(c.next_pass_s))
+        );
+    }
     let _ = writeln!(s, "runs: {}", snap.runs.len());
     for r in &snap.runs {
         let mut line = format!(

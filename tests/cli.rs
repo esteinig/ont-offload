@@ -39,16 +39,26 @@ fn unknown_subcommand_is_a_usage_error() {
         .stderr(predicate::str::contains("frobnicate"));
 }
 
-/// Verifies: SRS-CLI-004
+/// Verifies: SRS-CLI-001, SRS-CLI-004
 #[test]
-fn unimplemented_command_exits_1_with_plan() {
-    bin()
-        .args(["cleanup", "--dry-run"])
-        .assert()
-        .code(1)
-        .stderr(
-            predicate::str::contains("not implemented yet").and(predicate::str::contains("v0.5")),
-        );
+fn every_command_is_implemented() {
+    // Since v0.5 no command is a placeholder: each one reaches its
+    // configuration and fails with 2 when there is none.
+    for cmd in [
+        vec!["cleanup", "--dry-run"],
+        vec!["status"],
+        vec!["bench"],
+        vec!["check-config"],
+        vec!["watch"],
+        vec!["run", "/nonexistent"],
+    ] {
+        bin()
+            .args(["--config", "/nonexistent/config.toml"])
+            .args(&cmd)
+            .assert()
+            .code(2)
+            .stderr(predicate::str::contains("not implemented").not());
+    }
 }
 
 /// Verifies: SRS-LOG-002
@@ -57,9 +67,15 @@ fn log_file_receives_lines() {
     let dir = tempfile::tempdir().expect("tempdir");
     let log = dir.path().join("ont-offload.log");
     bin()
-        .args(["--log-file", log.to_str().expect("utf8"), "cleanup"])
+        .args([
+            "--log-file",
+            log.to_str().expect("utf8"),
+            "--config",
+            "/nonexistent/c.toml",
+            "cleanup",
+        ])
         .assert()
-        .code(1);
+        .code(2);
     let text = std::fs::read_to_string(&log).expect("log written");
     assert!(text.contains("starting: cleanup"), "{text}");
 }
@@ -68,9 +84,15 @@ fn log_file_receives_lines() {
 #[test]
 fn json_log_format_on_stderr() {
     bin()
-        .args(["--log-format", "json", "cleanup"])
+        .args([
+            "--log-format",
+            "json",
+            "--config",
+            "/nonexistent/c.toml",
+            "cleanup",
+        ])
         .assert()
-        .code(1)
+        .code(2)
         .stderr(predicate::str::contains("\"level\":\"INFO\""));
 }
 

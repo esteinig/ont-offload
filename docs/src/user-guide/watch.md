@@ -122,6 +122,7 @@ Every state change is also appended to `state_dir/events.jsonl`, one JSON object
 | `paused`, `resumed`, `guard_failed`, `capacity_low`, `capacity_ok` | Writes stopped or started again, and why |
 | `outage_started`, `outage_summary`, `outage_warning`, `outage_alert`, `outage_reminder`, `outage_recovering`, `outage_ended` | A share outage |
 | `worker_stalled`, `source_space_low`, `source_space_ok` | A stuck worker; the sequencer's own disk below `outage.source_free_alert` |
+| `run_deleted`, `deletion_dry_run`, `deletion_refused`, `deletion_stopped` | Source cleanup: a run deleted; what a dry-run pass would delete; a run kept because a gate failed (alert, once); a pass stopped by an error (alert). See [Deleting offloaded runs](cleanup.md) |
 
 `outage.notify_command` runs for every event that needs a person: outage start, warning, alert, reminder and end, stalls, failed files and runs, reopened runs, integrity mismatches, guard failures and low space. It is a program and its arguments, run without a shell, with the event as one JSON line on stdin and in `ONT_OFFLOAD_EVENT_JSON`, and the kind, level and message in `ONT_OFFLOAD_EVENT`, `ONT_OFFLOAD_LEVEL` and `ONT_OFFLOAD_MESSAGE`. It is not waited for, and is killed after 60 s. For example, a script that sends a Teams message:
 

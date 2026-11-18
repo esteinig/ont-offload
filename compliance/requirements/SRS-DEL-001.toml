@@ -4,10 +4,10 @@ title = "Deletion off by default"
 status = "draft"
 release = "v0.5"
 text = """
-Deletes nothing unless delete is on; in dry-run reports per-run gate results and deletes nothing.
+Deletes nothing unless cleanup.delete is "on". `cleanup` with deletion off refuses with exit 2; in dry-run (cleanup.delete = "dry-run" or `cleanup --dry-run`) each pass reports every completed run's gate results (would_delete, held, waiting, refused) in cleanup-reports.jsonl, and as a deletion_dry_run event in watch, and deletes nothing.
 """
-verification = "Integration"
+verification = "Unit: off, dry-run and --dry-run modes delete nothing and are reported; fake-clock watch test; integration through the binary"
 
 [links]
-allocated_to = ["SWI-CLEANUP"]
+allocated_to = ["SWI-CLEANUP", "SWI-CLI"]
 mitigates = ["HAZ-009"]

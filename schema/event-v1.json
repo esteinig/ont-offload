@@ -61,7 +61,11 @@
         "outage_ended",
         "worker_stalled",
         "source_space_low",
-        "source_space_ok"
+        "source_space_ok",
+        "run_deleted",
+        "deletion_dry_run",
+        "deletion_refused",
+        "deletion_stopped"
       ]
     },
     "level": {

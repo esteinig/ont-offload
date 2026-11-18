@@ -6,8 +6,13 @@ cause = "Deletion enabled with insufficient checks"
 harm = "Unrecoverable data loss; repeat sample needed"
 severity = "critical"
 probability_before = "remote"
+# v0.5: SRS-DEL-001 to 006 implemented and verified: one test per failing gate, fault tests for a
+# share lost or a removal failing mid-deletion, the fake-clock watch tests and the 72 h soak over
+# 200 runs with hourly storage-side verification. Deletion stays off by default; the site runs two
+# weeks in dry-run and reviews the reports before turning it on. Proposed residual probability once
+# reviewed and the dry-run reports are accepted: improbable.
 # Residual probability is set when the risk controls are verified.
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-VER-004", "SRS-DEL-001", "SRS-DEL-002", "SRS-DEL-003", "SRS-DEL-004"]
+controlled_by = ["SRS-VER-004", "SRS-DEL-001", "SRS-DEL-002", "SRS-DEL-003", "SRS-DEL-004", "SRS-DEL-005", "SRS-DEL-006"]
