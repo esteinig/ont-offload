@@ -4,7 +4,10 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [
+  { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; compile-time only via ratatui, no fix upstream yet" },
+  { id = "RUSTSEC-2026-0542", reason = "chrono is unmaintained; no safe update available for now" },
+]
 
 [licenses]
 version = 2
