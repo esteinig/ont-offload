@@ -12,12 +12,14 @@
 //! - [`check`]: compares an offloaded copy with a manifest.
 //! - [`clean`]: removes what the simulator created, and nothing else.
 //! - [`status`]: live `status.json` and `events.jsonl`.
+//! - [`resume`]: `resume.json`, to continue a stopped simulation.
 
 pub mod check;
 pub mod clean;
 pub mod engine;
 pub mod plan;
 pub mod profile;
+pub mod resume;
 pub mod rng;
 pub mod scenario;
 pub mod status;

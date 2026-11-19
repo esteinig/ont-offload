@@ -305,7 +305,15 @@ impl Scenario {
     /// # Errors
     /// [`Error::Scenario`] for an unknown name.
     pub fn preset(name: &str) -> Result<Self> {
-        let text = match name {
+        Self::from_toml(Self::preset_text(name)?, None)
+    }
+
+    /// The TOML text of a built-in preset.
+    ///
+    /// # Errors
+    /// [`Error::Scenario`] for an unknown name.
+    pub fn preset_text(name: &str) -> Result<&'static str> {
+        Ok(match name {
             "quick-2h" => include_str!("../presets/quick-2h.toml"),
             "promethion-24h" => include_str!("../presets/promethion-24h.toml"),
             "outage-drill" => include_str!("../presets/outage-drill.toml"),
@@ -321,8 +329,7 @@ impl Scenario {
                     crate::PRESETS.join(", ")
                 )));
             }
-        };
-        Self::from_toml(text, None)
+        })
     }
 
     /// Check values and combinations.

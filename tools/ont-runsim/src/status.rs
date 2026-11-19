@@ -41,6 +41,12 @@ pub fn runs_list(out: &Path) -> PathBuf {
     state_dir(out).join("runs.txt")
 }
 
+/// `<out>/.ont-runsim/resume.json`: what `run --resume` needs to rebuild the plan.
+#[must_use]
+pub fn resume_path(out: &Path) -> PathBuf {
+    state_dir(out).join("resume.json")
+}
+
 /// RFC 3339 UTC timestamp, seconds precision.
 #[must_use]
 pub fn now_rfc3339() -> String {
@@ -138,6 +144,39 @@ pub fn pid_alive(pid: u32) -> bool {
     } else {
         true
     }
+}
+
+/// One line of `events.jsonl`, as read back.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Event {
+    /// Simulated second.
+    pub sim_s: f64,
+    /// Event name.
+    pub event: String,
+    /// Run folder name, for run events.
+    #[serde(default)]
+    pub run: Option<String>,
+    /// Detail.
+    #[serde(default)]
+    pub detail: String,
+}
+
+/// Read `events.jsonl`. A missing file reads as no events; a line that does
+/// not parse (cut short by a crash mid-write) is skipped.
+///
+/// # Errors
+/// I/O errors other than a missing file.
+pub fn read_events(out: &Path) -> Result<Vec<Event>> {
+    let p = events_path(out);
+    let text = match std::fs::read_to_string(&p) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(io_err("read", &p)(e)),
+    };
+    Ok(text
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect())
 }
 
 /// Appends events to `events.jsonl`.
