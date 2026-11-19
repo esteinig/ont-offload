@@ -3,6 +3,7 @@ tag_prefix = "v"
 branch_whitelist = ["main"]
 ignore_merge_commits = true
 skip_untracked = false
+from_latest_tag = true
 
 pre_bump_hooks = [
   "cargo xtask set-version {{version}}",
