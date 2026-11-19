@@ -1,0 +1,13 @@
+id = "SRS-RPT-001"
+type = "requirement"
+title = "Status report of a period"
+status = "draft"
+release = "v0.9"
+text = """
+`ont-offload report status` reports a period (--from/--to, --month or --last; UTC) from the records: a verdict (ok, attention or action required) with every reason, key figures (runs completed, failed, reopened and deleted; files and bytes committed; files failed; integrity mismatches; outages, downtime and availability; stalls; refused deletions), the data committed per day with outage time, every run with activity (flow cell, position, discovery, completion, duration, size, manifest digest, status at the end of the period), incidents with their outcome, the starts of the daemon with their version, source cleanup, and with --check-destination whether each complete run has a matching VERIFIED.json. Action required: a run still failed, a file failed for good, a condition still open at the end of the period, a gap in the records. Attention: outages, mismatches, reopened runs, stalls, guard failures, refused deletions, runs without a receipt, recovered failures.
+"""
+verification = "Unit: hand-written event histories for each verdict, counts limited to the period, open conditions, receipts; schema check of the record; integration: the binary writes the report files"
+
+[links]
+allocated_to = ["SWI-REPORT", "SWI-CLI"]
+mitigates = ["HAZ-023"]

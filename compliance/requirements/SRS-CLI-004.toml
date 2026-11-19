@@ -4,7 +4,7 @@ title = "Exit codes"
 status = "draft"
 release = "v0.1"
 text = """
-Exits with 0 (done), 1 (internal), 2 (configuration or guard refused), 3 (files or runs failed), 4 (integrity mismatch), 75 (restart needed) or 130 (interrupted).
+Exits with 0 (done), 1 (internal), 2 (configuration or guard refused), 3 (files or runs failed, or a verification report FAIL), 4 (integrity mismatch), 5 (verification report INCONCLUSIVE), 75 (restart needed) or 130 (interrupted).
 """
 verification = "Unit + integration"
 

@@ -1,0 +1,13 @@
+id = "SRS-RPT-004"
+type = "requirement"
+title = "Report record and PDF"
+status = "draft"
+release = "v0.9"
+text = """
+Every report is written as a JSON record valid against its schema in schema/, and by default as a PDF/A-2b rendered from that record with the typst templates and IBM Plex fonts compiled into the binary (build feature `report`; release binaries include it); --format typ writes the templates with the record to compile elsewhere. The PDF names the SHA-256 of the record in its footer, shows text from the record as text (never as markup), and the same record and time give the same PDF. A sha256sum file lists every output. Decisions are made in the record, the templates only format.
+"""
+verification = "Unit: empty and full records render with and without appendix, deterministic output, PDF/A marker; integration: the binary writes PDF, JSON, typst sources and a matching sha256sum file"
+
+[links]
+allocated_to = ["SWI-REPORT"]
+mitigates = ["HAZ-023"]

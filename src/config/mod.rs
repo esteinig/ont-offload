@@ -74,6 +74,42 @@ pub struct RawConfig {
     /// `[tui]`
     #[serde(default)]
     pub tui: RawTui,
+    /// `[report]`
+    #[serde(default)]
+    pub report: RawReport,
+}
+
+/// `[report]` as written: how status and verification reports are labelled.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct RawReport {
+    /// Site name printed on every report.
+    pub site: Option<String>,
+    /// Prefix of report ids and file names.
+    pub prefix: String,
+    /// PNG, JPEG or SVG logo printed in the title block.
+    pub logo: Option<String>,
+}
+
+impl Default for RawReport {
+    fn default() -> Self {
+        Self {
+            site: None,
+            prefix: "OOF".into(),
+            logo: None,
+        }
+    }
+}
+
+/// `[report]`, validated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportCfg {
+    /// Site name.
+    pub site: Option<String>,
+    /// Report id prefix (letters, digits and `-`, at most 16).
+    pub prefix: String,
+    /// Logo file.
+    pub logo: Option<PathBuf>,
 }
 
 /// `[tui]` as written: settings of the monitoring dashboard.
@@ -235,8 +271,12 @@ pub fn logging_settings(path: &Path) -> Option<(Option<PathBuf>, LogFormat)> {
 pub struct RawState {
     /// How often `state.json` is rewritten.
     pub interval: String,
-    /// Size at which `events.jsonl` is rotated to `events.jsonl.1`.
+    /// Size at which `events.jsonl` is rotated to `events.jsonl.1` (older
+    /// segments move to `events/` and are kept).
     pub events_max_size: String,
+    /// Raise `records_space_low` when the disk of `state_dir` or of the
+    /// log file has less free space than this (`0` turns it off).
+    pub free_alert: String,
 }
 
 impl Default for RawState {
@@ -244,6 +284,7 @@ impl Default for RawState {
         Self {
             interval: "2s".into(),
             events_max_size: "64MB".into(),
+            free_alert: "5GB".into(),
         }
     }
 }
@@ -709,6 +750,8 @@ pub struct StateCfg {
     pub interval: Duration,
     /// `events.jsonl` rotation size in bytes.
     pub events_max_size: u64,
+    /// Free space below which `records_space_low` is raised (0: off).
+    pub free_alert: u64,
 }
 
 /// `[selection]`, validated.
@@ -823,6 +866,8 @@ pub struct Config {
     pub log_file: Option<PathBuf>,
     /// Log format.
     pub log_format: LogFormat,
+    /// Report labels.
+    pub report: ReportCfg,
     /// Live state settings.
     pub state: StateCfg,
 }
@@ -1425,6 +1470,35 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
     {
         c.problem("state.events_max_size", "must be at least 1MiB");
     }
+    let state_free_alert = c.size("state.free_alert", &raw.state.free_alert);
+    let rp = &raw.report;
+    if rp.prefix.is_empty()
+        || rp.prefix.len() > 16
+        || !rp
+            .prefix
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        c.problem(
+            "report.prefix",
+            format!("{:?} must be 1 to 16 letters, digits or -", rp.prefix),
+        );
+    }
+    let logo = rp.logo.as_ref().map(PathBuf::from);
+    if let Some(l) = &logo {
+        let ok = l.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+            matches!(
+                e.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "svg"
+            )
+        });
+        if !ok {
+            c.problem(
+                "report.logo",
+                format!("{} must be a PNG, JPEG or SVG file", l.display()),
+            );
+        }
+    }
     let file_mode = match u32::from_str_radix(t.file_mode.trim_start_matches("0o"), 8) {
         Ok(m) if m <= 0o777 && m & 0o600 == 0o600 => m,
         Ok(m) if m <= 0o777 => {
@@ -1608,9 +1682,15 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
             allowed_fstypes: raw.guard.allowed_fstypes.clone(),
             log_file,
             log_format: raw.logging.format,
+            report: ReportCfg {
+                site: rp.site.clone().filter(|s| !s.trim().is_empty()),
+                prefix: rp.prefix.clone(),
+                logo,
+            },
             state: StateCfg {
                 interval: state_interval,
                 events_max_size,
+                free_alert: state_free_alert,
             },
         },
         warnings: c.warnings,

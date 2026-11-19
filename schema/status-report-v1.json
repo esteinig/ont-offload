@@ -1,0 +1,651 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/esteinig/ont-offload/schema/status-report-v1.json",
+  "title": "ont-offload status report, version 1",
+  "description": "Written by `ont-offload report status` next to the PDF it renders. Fields may be added within version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "tool_version",
+    "host",
+    "site",
+    "period",
+    "target_id",
+    "destination",
+    "sources",
+    "versions",
+    "verdict",
+    "totals",
+    "daily",
+    "runs",
+    "incidents",
+    "sessions",
+    "cleanup",
+    "inputs",
+    "log_issues",
+    "events"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ont-offload/status-report/v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "tool_version": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string"
+    },
+    "site": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "period": {
+      "$ref": "#/$defs/period"
+    },
+    "target_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "destination": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "versions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    },
+    "totals": {
+      "$ref": "#/$defs/totals"
+    },
+    "daily": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/day"
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "incidents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/incident"
+      }
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/session"
+      }
+    },
+    "cleanup": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/cleanup"
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/input"
+      }
+    },
+    "log_issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/log_line"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "last_day",
+        "days"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "last_day": {
+          "type": "string"
+        },
+        "days": {
+          "type": "integer"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "root"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "headline",
+        "reasons"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "attention",
+            "action_required"
+          ]
+        },
+        "headline": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs_active",
+        "runs_completed",
+        "runs_failed",
+        "runs_reopened",
+        "runs_deleted",
+        "files_committed",
+        "bytes_committed",
+        "files_failed",
+        "integrity_mismatches",
+        "outages",
+        "outage_s",
+        "availability_pct",
+        "stalls",
+        "deletion_refused",
+        "unverified_runs"
+      ],
+      "properties": {
+        "runs_active": {
+          "type": "integer"
+        },
+        "runs_completed": {
+          "type": "integer"
+        },
+        "runs_failed": {
+          "type": "integer"
+        },
+        "runs_reopened": {
+          "type": "integer"
+        },
+        "runs_deleted": {
+          "type": "integer"
+        },
+        "files_committed": {
+          "type": "integer"
+        },
+        "bytes_committed": {
+          "type": "integer"
+        },
+        "files_failed": {
+          "type": "integer"
+        },
+        "integrity_mismatches": {
+          "type": "integer"
+        },
+        "outages": {
+          "type": "integer"
+        },
+        "outage_s": {
+          "type": "integer"
+        },
+        "availability_pct": {
+          "type": "number"
+        },
+        "stalls": {
+          "type": "integer"
+        },
+        "deletion_refused": {
+          "type": "integer"
+        },
+        "unverified_runs": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "day",
+        "files",
+        "bytes",
+        "outage_s"
+      ],
+      "properties": {
+        "day": {
+          "type": "string"
+        },
+        "files": {
+          "type": "integer"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "outage_s": {
+          "type": "integer"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "flow_cell",
+        "position",
+        "discovered_at",
+        "completed_at",
+        "duration_s",
+        "files_in_period",
+        "bytes_in_period",
+        "files",
+        "bytes",
+        "manifest_sha256",
+        "destination",
+        "status",
+        "error"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "flow_cell": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discovered_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completed_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "files_in_period": {
+          "type": "integer"
+        },
+        "bytes_in_period": {
+          "type": "integer"
+        },
+        "files": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "bytes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "manifest_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "destination": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "complete",
+            "verified",
+            "reopened",
+            "failed",
+            "deleted"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "incident": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "duration_s",
+        "kind",
+        "level",
+        "run",
+        "file",
+        "message",
+        "outcome"
+      ],
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "resolved",
+            "retried",
+            "open",
+            "failed"
+          ]
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started",
+        "last_record",
+        "version",
+        "pid",
+        "restart_after_s"
+      ],
+      "properties": {
+        "started": {
+          "type": "string"
+        },
+        "last_record": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pid": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "restart_after_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts",
+        "run",
+        "outcome",
+        "files",
+        "bytes",
+        "message"
+      ],
+      "properties": {
+        "ts": {
+          "type": "string"
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "deleted",
+            "refused",
+            "stopped"
+          ]
+        },
+        "files": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "bytes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "path",
+        "files",
+        "lines",
+        "first",
+        "last",
+        "gaps"
+      ],
+      "properties": {
+        "record": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "files": {
+          "type": "integer"
+        },
+        "lines": {
+          "type": "integer"
+        },
+        "first": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "log_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts",
+        "level",
+        "target",
+        "message"
+      ],
+      "properties": {
+        "ts": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts",
+        "kind",
+        "level",
+        "run",
+        "message"
+      ],
+      "properties": {
+        "ts": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string"
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

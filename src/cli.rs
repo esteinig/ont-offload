@@ -175,6 +175,112 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Clinical operations reports (PDF and JSON).
+    Report {
+        /// Which report.
+        #[command(subcommand)]
+        kind: ReportCmd,
+    },
+}
+
+/// Reports.
+#[derive(Debug, Subcommand)]
+pub enum ReportCmd {
+    /// What ont-offload did over a period, from its event, log and journal
+    /// records: runs, data, incidents, sessions, cleanup and record
+    /// completeness, with a verdict.
+    Status(StatusReportArgs),
+    /// Whether an execution was offloaded completely and correctly: a
+    /// simulation (ont-runsim) or a MinKNOW mock run, checked against a
+    /// reference ont-offload did not produce, under a test protocol. Exits
+    /// 0 on PASS, 3 on FAIL and 5 when a required check cannot be decided.
+    Verify(VerifyReportArgs),
+}
+
+/// `report verify`.
+#[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("reference").required(true).args(["sim", "minknow"])))]
+pub struct VerifyReportArgs {
+    /// Output folder of ont-runsim (its manifests are the reference).
+    #[arg(long, value_name = "OUT")]
+    pub sim: Option<PathBuf>,
+    /// MinKNOW run folders at the source (re-hashed as the reference; they
+    /// must not have been deleted yet).
+    #[arg(long, value_name = "RUN", num_args = 1..)]
+    pub minknow: Vec<PathBuf>,
+    /// Test protocol: simulation, p2i-acceptance, minknow-mock, or a
+    /// protocol file [default: simulation with --sim, minknow-mock with
+    /// --minknow].
+    #[arg(long)]
+    pub protocol: Option<String>,
+    /// Start of the execution, RFC 3339 or a date [default: when the
+    /// simulation started, else the first event about a reference run].
+    #[arg(long)]
+    pub from: Option<String>,
+    /// End of the execution [default: now].
+    #[arg(long)]
+    pub to: Option<String>,
+    /// Who ran the execution, printed on the report.
+    #[arg(long)]
+    pub operator: Option<String>,
+    /// A deviation from the protocol, printed on the report (repeatable).
+    #[arg(long)]
+    pub deviation: Vec<String>,
+    /// State folder of the daemon [default: `state_dir` of the configuration].
+    #[arg(long)]
+    pub state_dir: Option<PathBuf>,
+    /// The daemon's log file [default: `logging.file` of the configuration].
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+    /// Folder for the report files.
+    #[arg(long, short, default_value = ".")]
+    pub out: PathBuf,
+    /// Comma-separated output formats: pdf, json, typ [default: pdf,json,
+    /// or json in a build without PDF support].
+    #[arg(long)]
+    pub format: Option<String>,
+}
+
+/// `report status`.
+#[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("when").args(["month", "last", "from"])))]
+#[command(group(clap::ArgGroup::new("until").args(["month", "last", "to"])))]
+pub struct StatusReportArgs {
+    /// First day (2026-10-01) or time (RFC 3339) of the period, UTC
+    /// [default: 30 days before --to].
+    #[arg(long)]
+    pub from: Option<String>,
+    /// Last day (inclusive) or end time of the period, UTC [default: now].
+    #[arg(long)]
+    pub to: Option<String>,
+    /// A calendar month, e.g. 2026-10.
+    #[arg(long)]
+    pub month: Option<String>,
+    /// The time up to now, e.g. 7d or 24h.
+    #[arg(long)]
+    pub last: Option<String>,
+    /// State folder of the daemon [default: `state_dir` of the configuration].
+    #[arg(long)]
+    pub state_dir: Option<PathBuf>,
+    /// The daemon's log file; its rotations are read too [default:
+    /// `logging.file` of the configuration].
+    #[arg(long)]
+    pub log: Option<PathBuf>,
+    /// Folder for the report files.
+    #[arg(long, short, default_value = ".")]
+    pub out: PathBuf,
+    /// Comma-separated output formats: pdf (always with its json record),
+    /// json, typ (the typst sources and record, to compile elsewhere)
+    /// [default: pdf,json, or json in a build without PDF support].
+    #[arg(long)]
+    pub format: Option<String>,
+    /// Also read each completed run's VERIFIED.json on the share.
+    #[arg(long)]
+    pub check_destination: bool,
+    /// Append every event of the period (except per-file commits) and every
+    /// warning and error log line.
+    #[arg(long)]
+    pub appendix: bool,
 }
 
 /// Options of `init`.
@@ -341,6 +447,7 @@ impl Command {
             Self::Bench { .. } => "bench",
             Self::Cleanup { .. } => "cleanup",
             Self::Tui { .. } => "tui",
+            Self::Report { .. } => "report",
         }
     }
 
@@ -354,7 +461,7 @@ impl Command {
             Self::Status { .. } | Self::Bench { .. } => "v0.4",
             Self::Cleanup { .. } => "v0.5",
             Self::Tui { .. } => "v0.6",
-            Self::Init(_) => "v0.9",
+            Self::Report { .. } | Self::Init(_) => "v0.9",
         }
     }
 }
@@ -418,6 +525,43 @@ mod tests {
             ],
             vec!["ont-offload", "cleanup", "--dry-run"],
             vec!["ont-offload", "tui"],
+            vec!["ont-offload", "report", "status", "--month", "2026-10"],
+            vec![
+                "ont-offload",
+                "report",
+                "verify",
+                "--sim",
+                "/data/ont-runsim",
+            ],
+            vec![
+                "ont-offload",
+                "report",
+                "verify",
+                "--minknow",
+                "/data/a",
+                "/data/b",
+                "--protocol",
+                "minknow-mock",
+                "--operator",
+                "E. S.",
+                "--deviation",
+                "share swapped",
+            ],
+            vec![
+                "ont-offload",
+                "report",
+                "status",
+                "--from",
+                "2026-10-01",
+                "--to",
+                "2026-10-31",
+                "--state-dir",
+                "/var/lib/x",
+                "--out",
+                "/tmp",
+                "--check-destination",
+                "--appendix",
+            ],
             vec![
                 "ont-offload",
                 "tui",

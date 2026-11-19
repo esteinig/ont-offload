@@ -5,7 +5,9 @@ JSON Schemas (draft 2020-12) for the live state that `ont-offload watch` publish
 | File | Describes |
 |---|---|
 | `state-v1.json` | `state_dir/state.json`, the snapshot rewritten every `state.interval` |
-| `event-v1.json` | One line of `state_dir/events.jsonl` |
+| `event-v1.json` | One line of `state_dir/events.jsonl` (and of the archived segments in `state_dir/events/`) |
+| `status-report-v1.json` | The JSON record of `ont-offload report status`, next to its PDF |
+| `verification-report-v1.json` | The JSON record of `ont-offload report verify`, next to its PDF |
 
 Both documents carry `schema` and `schema_version`. Within version 1, fields may be added and a reader must ignore fields it does not know; removing or changing a field raises the version.
 

@@ -75,8 +75,13 @@ notify_command = ""
 [state]
 # state_dir/state.json is rewritten this often; `ont-offload status` reads it.
 interval = "2s"
-# state_dir/events.jsonl is rotated to events.jsonl.1 at this size.
+# state_dir/events.jsonl is rotated to events.jsonl.1 at this size; the
+# previous events.jsonl.1 moves to state_dir/events/. Nothing is ever deleted:
+# the events are the record for a clinical lookback (ont-offload report).
 events_max_size = "64MB"
+# Raise records_space_low when the disk of state_dir or of logging.file has
+# less free space than this ("0B" turns the alert off).
+free_alert = "5GB"
 
 [cleanup]
 # Delete source runs once a verified copy is on the share. Run "dry-run" for
@@ -100,3 +105,9 @@ format = "text"                  # or "json"
 theme = "plain"                  # "plain", "matrix", "phosphor" or "synthwave"
 refresh = "1s"                   # 200ms to 60s
 bell = true                      # ring the terminal bell on a new alert
+
+[report]
+# `ont-offload report status` and `report verify` (see the Reports page).
+# site = "Clinical Genomics, Example Hospital"   # printed in every title block
+prefix = "OOF"                   # report ids and file names
+# logo = "/etc/ont-offload/logo.png"             # PNG, JPEG or SVG

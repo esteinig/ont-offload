@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/esteinig/ont-offload/schema/verification-report-v1.json",
+  "title": "ont-offload verification report, version 1",
+  "description": "Written by `ont-offload report verify` next to the PDF it renders. Each check compares what ont-offload put on the share and recorded with an independent reference (the simulator's manifests, or the source runs re-hashed at report time). Fields may be added within version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "tool_version",
+    "host",
+    "site",
+    "protocol",
+    "mode",
+    "simulated",
+    "reference",
+    "window",
+    "operator",
+    "deviations",
+    "verdict",
+    "checks",
+    "runs",
+    "timeline",
+    "environment",
+    "inputs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "ont-offload/verification-report/v1"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "report_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "tool_version": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string"
+    },
+    "site": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "protocol": {
+      "$ref": "#/$defs/protocol"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "simulation",
+        "minknow"
+      ]
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "reference": {
+      "$ref": "#/$defs/reference"
+    },
+    "window": {
+      "$ref": "#/$defs/window"
+    },
+    "operator": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/run"
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/timeline_entry"
+      }
+    },
+    "environment": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/env_entry"
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/input"
+      }
+    }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "description",
+        "sha256",
+        "max_minutes_to_complete"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "max_minutes_to_complete": {
+          "type": "integer"
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "detail"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "headline",
+        "required_passed",
+        "required"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive"
+          ]
+        },
+        "headline": {
+          "type": "string"
+        },
+        "required_passed": {
+          "type": "integer"
+        },
+        "required": {
+          "type": "integer"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "expected",
+        "requirements",
+        "required",
+        "observed",
+        "result"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^VC-[0-9]{2}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "observed": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive",
+            "n/a"
+          ]
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source_state",
+        "destination",
+        "expected",
+        "matched",
+        "bytes",
+        "missing",
+        "changed",
+        "extra",
+        "complete",
+        "manifest_agrees",
+        "receipt",
+        "latency_s",
+        "result"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source_state": {
+          "type": "string"
+        },
+        "destination": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected": {
+          "type": "integer"
+        },
+        "matched": {
+          "type": "integer"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "changed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "extra": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "manifest_agrees": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "receipt": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "latency_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "inconclusive",
+            "n/a"
+          ]
+        }
+      }
+    },
+    "timeline_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ts",
+        "source",
+        "kind",
+        "detail"
+      ],
+      "properties": {
+        "ts": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "env_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "path",
+        "files",
+        "lines",
+        "first",
+        "last",
+        "gaps"
+      ],
+      "properties": {
+        "record": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "files": {
+          "type": "integer"
+        },
+        "lines": {
+          "type": "integer"
+        },
+        "first": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

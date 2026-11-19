@@ -112,7 +112,7 @@ alerts: none
 
 ## Events and notifications
 
-Every state change is also appended to `state_dir/events.jsonl`, one JSON object per line ([`schema/event-v1.json`](https://github.com/esteinig/ont-offload/blob/dev/schema/event-v1.json)) with a sequence number, time, kind, level, run, file, message and details. The file is rotated to `events.jsonl.1` when it reaches `state.events_max_size` (64 MB).
+Every state change is also appended to `state_dir/events.jsonl`, one JSON object per line ([`schema/event-v1.json`](https://github.com/esteinig/ont-offload/blob/dev/schema/event-v1.json)) with a sequence number, time, kind, level, run, file, message and details. The file is rotated to `events.jsonl.1` when it reaches `state.events_max_size` (64 MB); the previous `events.jsonl.1` moves to `state_dir/events/events-<time of its first event>.jsonl`. Nothing is ever deleted, so every event since installation stays available for a clinical lookback (`ont-offload report`). `state.free_alert` (5 GB) raises `records_space_low` before the disk holding the state folder or the log fills.
 
 | Kinds | When |
 | --- | --- |
@@ -122,6 +122,7 @@ Every state change is also appended to `state_dir/events.jsonl`, one JSON object
 | `paused`, `resumed`, `guard_failed`, `capacity_low`, `capacity_ok` | Writes stopped or started again, and why |
 | `outage_started`, `outage_summary`, `outage_warning`, `outage_alert`, `outage_reminder`, `outage_recovering`, `outage_ended` | A share outage |
 | `worker_stalled`, `source_space_low`, `source_space_ok` | A stuck worker; the sequencer's own disk below `outage.source_free_alert` |
+| `records_space_low`, `records_space_ok` | The disk of `state_dir` or of the log file below `state.free_alert`: the records are kept forever and need room |
 | `run_deleted`, `deletion_dry_run`, `deletion_refused`, `deletion_stopped` | Source cleanup: a run deleted; what a dry-run pass would delete; a run kept because a gate failed (alert, once); a pass stopped by an error (alert). See [Deleting offloaded runs](cleanup.md) |
 
 `outage.notify_command` runs for every event that needs a person: outage start, warning, alert, reminder and end, stalls, failed files and runs, reopened runs, integrity mismatches, guard failures and low space. It is a program and its arguments, run without a shell, with the event as one JSON line on stdin and in `ONT_OFFLOAD_EVENT_JSON`, and the kind, level and message in `ONT_OFFLOAD_EVENT`, `ONT_OFFLOAD_LEVEL` and `ONT_OFFLOAD_MESSAGE`. It is not waited for, and is killed after 60 s. For example, a script that sends a Teams message:

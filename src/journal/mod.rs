@@ -159,6 +159,10 @@ pub struct Journal {
     pub deleting: Option<String>,
     /// When gated deletion finished (RFC 3339), if it did.
     pub deleted_at: Option<String>,
+    /// When the claim was first made (RFC 3339); kept by compaction.
+    pub claimed_at: Option<String>,
+    /// When each file was committed (RFC 3339); kept by compaction.
+    pub committed_at: BTreeMap<String, String>,
     records: usize,
 }
 
@@ -182,6 +186,8 @@ impl Journal {
             completed_at: None,
             deleting: None,
             deleted_at: None,
+            claimed_at: None,
+            committed_at: BTreeMap::new(),
             records: 0,
         };
         let text = match fs.read(&j.path()) {
@@ -255,9 +261,10 @@ impl Journal {
     }
 
     /// Rewrite the journal as one claim, one record per file and the
-    /// completion record, atomically.
+    /// completion record, atomically. Each record keeps the time it was
+    /// first written, so the journal still dates every commit.
     ///
-    /// Implements: SRS-RES-008
+    /// Implements: SRS-RES-008, SRS-LOG-006
     ///
     /// # Errors
     /// I/O errors (the old journal is kept).
@@ -275,7 +282,7 @@ impl Journal {
                 source: source.clone(),
                 dest: dest.clone(),
                 dest_starts_at: *level,
-                ts: ts.clone(),
+                ts: self.claimed_at.clone().unwrap_or_else(|| ts.clone()),
             })?;
             n += 1;
         }
@@ -285,7 +292,11 @@ impl Journal {
                 size: c.size,
                 mtime_ns: c.mtime_ns,
                 sha256: c.sha256.clone(),
-                ts: ts.clone(),
+                ts: self
+                    .committed_at
+                    .get(rel)
+                    .cloned()
+                    .unwrap_or_else(|| ts.clone()),
             })?;
             n += 1;
         }
@@ -320,15 +331,21 @@ impl Journal {
                 source,
                 dest,
                 dest_starts_at,
-                ..
-            } => self.claim = Some((source, dest, dest_starts_at)),
+                ts,
+            } => {
+                if self.claim.is_none() {
+                    self.claimed_at = Some(ts);
+                }
+                self.claim = Some((source, dest, dest_starts_at));
+            }
             Record::File {
                 rel,
                 size,
                 mtime_ns,
                 sha256,
-                ..
+                ts,
             } => {
+                self.committed_at.insert(rel.clone(), ts);
                 self.files.insert(
                     rel,
                     Committed {
@@ -652,6 +669,47 @@ pub fn claim_on_share(
 mod tests {
     use super::*;
     use crate::fsio::RealFs;
+
+    /// Verifies: SRS-LOG-006, SRS-RES-008
+    #[test]
+    fn compaction_keeps_the_time_of_each_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = Path::new("/data/exp/s/run1");
+        let mut j = Journal::open(&RealFs, dir.path(), src).unwrap();
+        j.append(
+            &RealFs,
+            Record::Claim {
+                source: src.to_string_lossy().into_owned(),
+                dest: "exp/s/run1".into(),
+                dest_starts_at: DestLevel::default(),
+                ts: "2026-01-02T03:04:05Z".into(),
+            },
+        )
+        .unwrap();
+        for (rel, ts) in [
+            ("a.pod5", "2026-01-02T04:00:00Z"),
+            ("a.pod5", "2026-01-02T05:00:00Z"),
+            ("b.pod5", "2026-01-02T06:00:00Z"),
+        ] {
+            j.append(
+                &RealFs,
+                Record::File {
+                    rel: rel.into(),
+                    size: 1,
+                    mtime_ns: 1,
+                    sha256: "0".repeat(64),
+                    ts: ts.into(),
+                },
+            )
+            .unwrap();
+        }
+        j.compact(&RealFs).unwrap();
+        let j = Journal::open(&RealFs, dir.path(), src).unwrap();
+        assert_eq!(j.records(), 3);
+        assert_eq!(j.claimed_at.as_deref(), Some("2026-01-02T03:04:05Z"));
+        assert_eq!(j.committed_at["a.pod5"], "2026-01-02T05:00:00Z");
+        assert_eq!(j.committed_at["b.pod5"], "2026-01-02T06:00:00Z");
+    }
 
     /// Verifies: SRS-VER-002
     #[test]

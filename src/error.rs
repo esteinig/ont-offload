@@ -41,6 +41,15 @@ pub enum Error {
     #[error("integrity mismatch: {0}")]
     Integrity(String),
 
+    /// A verification report found failed checks (the report is written).
+    #[error("verification failed: {0}")]
+    VerificationFailed(String),
+
+    /// A verification report could not decide every required check (the
+    /// report is written).
+    #[error("verification inconclusive: {0}")]
+    Inconclusive(String),
+
     /// Workers are still stuck after an outage; a restart is needed.
     #[error("restart needed: {0}")]
     RestartNeeded(String),
@@ -71,6 +80,8 @@ pub mod exit {
     pub const FAILED: u8 = 3;
     /// Integrity mismatch not resolved.
     pub const INTEGRITY: u8 = 4;
+    /// A verification report could not decide every required check.
+    pub const INCONCLUSIVE: u8 = 5;
     /// Restart needed (workers stuck after an outage); journal is consistent.
     pub const RESTART: u8 = 75;
     /// Interrupted by a signal; journal is consistent.
@@ -85,7 +96,8 @@ impl Error {
     pub fn exit_code(&self) -> u8 {
         match self {
             Self::Config(_) | Self::Guard(_) => exit::CONFIG,
-            Self::Failed(_) => exit::FAILED,
+            Self::Failed(_) | Self::VerificationFailed(_) => exit::FAILED,
+            Self::Inconclusive(_) => exit::INCONCLUSIVE,
             Self::Integrity(_) => exit::INTEGRITY,
             Self::RestartNeeded(_) => exit::RESTART,
             Self::Logging { .. }
@@ -107,6 +119,8 @@ mod tests {
         assert_eq!(Error::Guard("x".into()).exit_code(), 2);
         assert_eq!(Error::Failed(1).exit_code(), 3);
         assert_eq!(Error::Integrity("x".into()).exit_code(), 4);
+        assert_eq!(Error::VerificationFailed("x".into()).exit_code(), 3);
+        assert_eq!(Error::Inconclusive("x".into()).exit_code(), 5);
         assert_eq!(Error::RestartNeeded("x".into()).exit_code(), 75);
         assert_eq!(
             Error::NotImplemented {

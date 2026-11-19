@@ -1,0 +1,8 @@
+# Built-in protocol: a real MinKNOW run (configuration test cell or
+# playback) offloaded by ont-offload. The source runs must still exist.
+name = "MinKNOW mock run"
+version = "1"
+description = "Every MinKNOW run is found, completed and copied byte for byte as it is at the source, with the file counts MinKNOW reports in its final summary; receipts are written; nothing failed; the records cover the execution."
+max_minutes_to_complete = 30
+required = ["VC-01", "VC-02", "VC-03", "VC-04", "VC-05", "VC-10", "VC-11", "VC-12", "VC-13", "VC-14", "VC-16"]
+informational = ["VC-08", "VC-09", "VC-15"]

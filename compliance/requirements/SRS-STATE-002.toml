@@ -4,7 +4,7 @@ title = "Event stream"
 status = "draft"
 release = "v0.4"
 text = """
-Appends one event per state change to events.jsonl, valid against schema/event-v1.json (run_discovered, run_state_changed, file_committed, file_failed, integrity_mismatch, run_complete, run_reopened, run_failed, run_retired, paused, resumed, guard_failed, capacity_low and capacity_ok, outage_started, outage_warning, outage_alert, outage_reminder, outage_recovering, outage_ended, worker_stalled, source_space_low and source_space_ok, run_deleted, deletion_dry_run, deletion_refused and deletion_stopped), with a sequence number, and rotates the file to events.jsonl.1 at state.events_max_size.
+Appends one event per state change to events.jsonl, valid against schema/event-v1.json (run_discovered, run_state_changed, file_committed, file_failed, integrity_mismatch, run_complete, run_reopened, run_failed, run_retired, paused, resumed, guard_failed, capacity_low and capacity_ok, outage_started, outage_warning, outage_alert, outage_reminder, outage_recovering, outage_ended, worker_stalled, source_space_low and source_space_ok, run_deleted, deletion_dry_run, deletion_refused and deletion_stopped, records_space_low and records_space_ok), with a sequence number, and rotates the file to events.jsonl.1 at state.events_max_size after moving the previous events.jsonl.1 into the archive state_dir/events/ (SRS-LOG-006).
 """
 verification = "Unit: every kind in the schema, rotation by size; fake-clock tests check the events of each scenario; integration"
 

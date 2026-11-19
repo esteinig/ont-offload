@@ -13,10 +13,10 @@ sudo install -m 0755 ont-offload-vX.Y.Z-x86_64-unknown-linux-gnu/ont-offload /us
 ## From source
 
 ```sh
-cargo install --locked --features tui --git https://github.com/esteinig/ont-offload --tag vX.Y.Z ont-offload
+cargo install --locked --features tui,report --git https://github.com/esteinig/ont-offload --tag vX.Y.Z ont-offload
 ```
 
-`--features tui` adds the [monitoring dashboard](tui.md); leave it out for a binary without it. The release binaries include it.
+`--features tui` adds the [monitoring dashboard](tui.md) and `--features report` the PDF rendering of [reports](reports.md) (typst and its fonts are compiled in; nothing else to install); leave them out for a binary without them, e.g. `--features tui,report` for both. The release binaries include both. Without `report`, `ont-offload report` writes the JSON records only.
 
 ## As a service
 

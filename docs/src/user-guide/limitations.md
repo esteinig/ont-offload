@@ -2,7 +2,7 @@
 
 Every known limitation of the current release is listed here with the hazard it relates to, what controls it today, and the control planned for a later release. Limitations that are already controlled are listed too, because the control is often a rule for the operator or leaves a remainder worth knowing. Hazards and requirements are in [`compliance/`](https://github.com/esteinig/ont-offload/tree/dev/compliance); the planned versions follow the [staged plan](../developer-guide/architecture.md#staged-implementation-plan).
 
-Status as of v0.8.
+Status as of v0.9 (in development).
 
 ## Open: controls planned
 
@@ -14,6 +14,7 @@ Status as of v0.8.
 | **The dashboard is tested on text renders, not on real terminals.** Symbols (`● ▲ ✖ ◷`), colours and the bell depend on the terminal emulator and font used over SSH. | HAZ-015 (minor) | SRS-TUI-004: severity is also a word; golden renders and a contrast check per theme in CI. **Operator rule:** check each theme you use on the site's terminals once (`t` cycles them), and use `plain` or `NO_COLOR` where symbols do not show. | Site acceptance: dashboard checked on the sequencer's terminal with an injected outage. |
 | **A user dataset is only as complete as the user's `READY`.** ont-offload cannot know whether a user is still copying into a folder they marked. | HAZ-020 (serious) | SRS-SRC-002: nothing is offloaded before `READY`; each file waits for `settle`, completion for `settle_after_complete`; changes within `watch_completed_for` withdraw `COMPLETE` and are copied again. **Operator rule:** tell users to write `READY` last and to start a new folder for later additions ([Several sources and user transfer folders](transfer-folders.md#how-users-drop-a-dataset-layout-ready)). | Site acceptance with real user drops. |
 | **The nightly NFS and Samba test has not run on GitHub yet.** | HAZ-007 | SRS-RES-005 is verified on a fake clock and by a local tmpfs rehearsal. | The first nightly run closes the gap. |
+| **A report is only as good as its records and its reference.** A status report cannot show what was never recorded, and a verification report with `--minknow` needs the source runs as they were written. The PDF is PDF/A-2b by construction but is not yet checked with an external validator. | HAZ-023 (serious) | SRS-RPT-001 to 005: every record read is listed with its time span and gaps, and any gap makes a status report "action required"; a verification check without its input is INCONCLUSIVE, never PASS; content is compared with the simulator's manifests or the re-hashed source, not with ont-offload's own manifest; the PDF names the SHA-256 of its JSON record. SRS-LOG-006 keeps every record. **Operator rule:** read the record completeness section before signing; run `report verify --minknow` before cleanup deletes the source runs. | veraPDF in CI; site acceptance with the signed `p2i-acceptance` report. |
 
 ## Controlled in v0.8
 
@@ -25,7 +26,7 @@ Status as of v0.8.
 
 | Limitation in v0.6 | Hazard | Control in v0.7 | What remains |
 | --- | --- | --- | --- |
-| **The log file grew without limit**, and logrotate renaming it left the daemon writing to the renamed file. | HAZ-018 (serious) | SRS-LOG-005: the log is reopened by name within a second of a rotation; `packaging/ont-offload.logrotate` rotates weekly or at 100 MB. | None. |
+| **The log file grew without limit**, and logrotate renaming it left the daemon writing to the renamed file. | HAZ-018 (serious) | SRS-LOG-005: the log is reopened by name within a second of a rotation; `packaging/ont-offload.logrotate` rotates weekly or at 100 MB. Since v0.9 (SRS-LOG-006) no log or event is ever removed, for a clinical lookback, and `state.free_alert` raises `records_space_low` before their disk fills. | Plan disk space for the records: roughly the size of `events.jsonl` segments and logs per month on your site. |
 | **The service ran as root**, so on an NFS export with `root_squash` its files arrived as `nobody`, and nothing showed who would own the copies. | HAZ-019 (minor) | SRS-DEP-001: the unit runs as the user `ont-offload` with private state and logs. SRS-GRD-004: `check-config` writes a probe file on the share and reports its owner and mode, with warnings for root, mapped owners and lost modes. | Whether the receiving side can read the copies is checked by hand at installation ([Deploying](deployment.md#5-checks-before-the-first-start)). |
 | **No way to compare with the legacy service during a parallel run.** | HAZ-003 | SRS-VER-005: `verify <run> --against <legacy copy>` and `scripts/compare-with-legacy.sh`. | The parallel run itself (site acceptance). |
 

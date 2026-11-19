@@ -1,0 +1,9 @@
+id = "SWI-REPORT"
+type = "software-item"
+title = "Clinical operations reports"
+status = "draft"
+safety_class = "B"
+paths = ["src/report/"]
+description = """
+`ont-offload report`: the status report of a period, built from the event archive, the log and its rotations and, optionally, the receipts on the share; and the verification report of an execution (simulated or a MinKNOW mock run) against an independent reference manifest. Each report is a JSON record (schema/status-report-v1.json, schema/verification-report-v1.json) rendered to PDF/A-2b with typst embedded in the binary (build feature `report`). Read-only. Class B: a report that shows OK or PASS without support in the records could let a failed offload or a broken installation go unnoticed in clinical review (HAZ-023).
+"""

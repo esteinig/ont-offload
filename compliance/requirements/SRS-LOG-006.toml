@@ -1,0 +1,13 @@
+id = "SRS-LOG-006"
+type = "requirement"
+title = "Records kept for clinical lookback"
+status = "draft"
+release = "v0.9"
+text = """
+No record of operation is pruned: rotated event segments move from events.jsonl.1 to state_dir/events/ under the time of their first event and are never deleted; the shipped logrotate configuration never removes or compresses old logs (rotate -1, dateext, nocompress); journal compaction keeps the time each claim and file was first recorded. Free space on the disks of state_dir and logging.file below state.free_alert raises records_space_low, which needs a person, and records_space_ok when it recovers.
+"""
+verification = "Unit: 300 events over many rotations read back once and in order; compaction keeps commit times; fake-clock test of the free-space alert; packaging test of the logrotate configuration"
+
+[links]
+allocated_to = ["SWI-STATE", "SWI-LOG", "SWI-JOURNAL", "SWI-SCHED"]
+mitigates = ["HAZ-018", "HAZ-023"]

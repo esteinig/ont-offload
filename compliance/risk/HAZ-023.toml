@@ -1,0 +1,14 @@
+id = "HAZ-023"
+type = "hazard"
+title = "A report shows OK or PASS that the records do not support"
+status = "draft"
+cause = "Records missing, unreadable or incomplete for part of the period; a check whose input is missing counted as passed; the expected content taken from ont-offload's own output instead of an independent reference; the PDF rendered from other data than the JSON record; a template that hides a failure"
+harm = "A clinical review or site acceptance accepts an installation or a period in which data was lost or not verified; missing sequencing data is found only when it is needed"
+severity = "serious"
+probability_before = "occasional"
+# v0.9: every input is summarised with its gaps and any gap means "action required" (SRS-RPT-002); every count, verdict and check result is decided in Rust and unit-tested, the template only formats (SRS-RPT-004); a verification check without its input is INCONCLUSIVE and the content is compared with a reference written by the simulator or re-hashed from the source, not with ont-offload's manifest alone (SRS-RPT-003); the PDF carries the SHA-256 of its JSON record (SRS-RPT-004); reports only read (SRS-RPT-005).
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-RPT-001", "SRS-RPT-002", "SRS-RPT-003", "SRS-RPT-004", "SRS-RPT-005", "SRS-LOG-006"]

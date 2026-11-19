@@ -11,12 +11,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 mod trace;
+mod verify_report;
 
 const USAGE: &str = "\
 cargo xtask <task> [options]
 
 tasks:
-  test [--unit|--integration]  run tests incl. the tui feature (nextest with JUnit if installed, else cargo test)
+  test [--unit|--integration]  run tests incl. the tui and report features (nextest with JUnit if installed, else cargo test)
   lint                         rustfmt --check and clippy -D warnings
   fmt                          format the workspace
   coverage                     llvm-cov lcov report (lcov.info)
@@ -28,7 +29,10 @@ tasks:
   soup [--write]               SOUP items from Cargo.lock (medtrace)
   check-commits [RANGE]        Conventional Commits and Refs: trailers (cog + medtrace)
   set-version <X.Y.Z>          set the workspace version
-  ci                           lint, test, trace --strict, deny (as CI does)";
+  ci                           lint, test, trace --strict, deny (as CI does)
+  verify-report [options]      simulated runs offloaded end to end, checked by
+                               `report verify`; PDF evidence in target/verify-report
+                               (--help for options)";
 
 type Res = Result<(), String>;
 
@@ -63,6 +67,11 @@ fn main() -> ExitCode {
         "check-commits" => check_commits(&rest),
         "set-version" => set_version(&rest),
         "ci" => ci(),
+        "verify-report" if rest.iter().any(|a| *a == "--help" || *a == "-h") => {
+            println!("{}", verify_report::USAGE);
+            Ok(())
+        }
+        "verify-report" => verify_report::verify_report(&rest),
         "-h" | "--help" | "help" => {
             println!("{USAGE}");
             Ok(())
@@ -127,7 +136,7 @@ fn test(args: &[&str]) -> Res {
                 "run",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--profile",
                 "unit",
             ])?;
@@ -138,13 +147,13 @@ fn test(args: &[&str]) -> Res {
                 "run",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--profile",
                 "integration",
             ])?;
         }
         if unit {
-            cargo(&["test", "--workspace", "--features", "tui", "--doc"])?;
+            cargo(&["test", "--workspace", "--features", "tui,report", "--doc"])?;
         }
         Ok(())
     } else {
@@ -154,12 +163,12 @@ fn test(args: &[&str]) -> Res {
                 "test",
                 "--workspace",
                 "--features",
-                "tui",
+                "tui,report",
                 "--lib",
                 "--bins",
             ]),
-            (false, true) => cargo(&["test", "--workspace", "--features", "tui", "--tests"]),
-            _ => cargo(&["test", "--workspace", "--features", "tui"]),
+            (false, true) => cargo(&["test", "--workspace", "--features", "tui,report", "--tests"]),
+            _ => cargo(&["test", "--workspace", "--features", "tui,report"]),
         }
     }
 }
@@ -185,7 +194,13 @@ fn builtin_trace(results: bool) -> Res {
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         eprintln!("$ {cargo} test --workspace --features tui --no-fail-fast");
         let out = Command::new(&cargo)
-            .args(["test", "--workspace", "--features", "tui", "--no-fail-fast"])
+            .args([
+                "test",
+                "--workspace",
+                "--features",
+                "tui,report",
+                "--no-fail-fast",
+            ])
             .current_dir(root())
             .output()
             .map_err(|e| format!("cannot run cargo test: {e}"))?;

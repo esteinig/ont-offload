@@ -311,6 +311,12 @@ impl Env {
         } else {
             format!("{extra}\n[outage]\nsource_free_alert = \"0B\"\n")
         };
+        // Nor room for the default state.free_alert.
+        let extra = if extra.contains("[state]") {
+            extra
+        } else {
+            format!("{extra}\n[state]\nfree_alert = \"0B\"\n")
+        };
         let path = self.dir.path().join("config.toml");
         std::fs::write(
             &path,
@@ -1111,6 +1117,40 @@ fn low_source_space_raises_an_alert_and_clears() {
     let k = kinds(&env);
     assert_eq!(k.iter().filter(|k| **k == Kind::SourceSpaceLow).count(), 1);
     assert!(k.contains(&Kind::SourceSpaceOk));
+}
+
+/// Verifies: SRS-LOG-006
+#[test]
+fn low_space_for_the_records_raises_an_alert_and_clears() {
+    let env = Env::new();
+    one_completed_run(&env);
+    env.fs.add(Rule::always(
+        Op::FreeSpace,
+        "/state",
+        Fault::Free(1_000_000),
+    ));
+    let mut w = env.watcher(env.cfg("", "[state]\nfree_alert = \"1GB\"\n"));
+    steps(&env, &mut w, 0, 60, 10);
+    assert!(
+        w.snapshot(s(60))
+            .alerts
+            .iter()
+            .any(|a| a.kind == Kind::RecordsSpaceLow),
+        "{:?}",
+        w.snapshot(s(60)).alerts
+    );
+    env.fs.clear();
+    env.base_rules();
+    steps(&env, &mut w, 70, 120, 10);
+    assert!(
+        !w.snapshot(s(120))
+            .alerts
+            .iter()
+            .any(|a| a.kind == Kind::RecordsSpaceLow)
+    );
+    let k = kinds(&env);
+    assert_eq!(k.iter().filter(|k| **k == Kind::RecordsSpaceLow).count(), 1);
+    assert!(k.contains(&Kind::RecordsSpaceOk));
 }
 
 /// Verifies: SRS-RATE-003

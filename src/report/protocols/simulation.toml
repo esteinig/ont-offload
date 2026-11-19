@@ -1,0 +1,7 @@
+# Built-in protocol: a run of ont-runsim offloaded by ont-offload.
+name = "Simulated runs"
+version = "1"
+description = "Every simulated run is found, completed and copied byte for byte as the simulator wrote it; nothing failed; the records cover the execution."
+max_minutes_to_complete = 15
+required = ["VC-01", "VC-02", "VC-03", "VC-04", "VC-05", "VC-06", "VC-07", "VC-10", "VC-13", "VC-14"]
+informational = ["VC-08", "VC-09", "VC-11", "VC-12", "VC-15"]

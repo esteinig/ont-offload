@@ -36,7 +36,9 @@
         "run_deleted",
         "deletion_dry_run",
         "deletion_refused",
-        "deletion_stopped"
+        "deletion_stopped",
+        "records_space_low",
+        "records_space_ok"
       ],
       "description": "Event kind, as in events.jsonl."
     },

@@ -61,6 +61,8 @@ jobs:
         run: echo "version=$(cog bump --auto --dry-run | sed 's/^v//')" >> "$GITHUB_OUTPUT"
       - name: Release gate, baseline and records
         run: medtrace release prepare --version "${{ steps.version.outputs.version }}" --out release-records
+      - name: Verification report of a simulated execution
+        run: cargo xtask verify-report --out release-records/verification --operator "release workflow"
       - uses: actions/upload-artifact@v4 # pin to a commit SHA
         with:
           name: release-records
@@ -97,7 +99,7 @@ jobs:
           targets: ${{ matrix.target }}
       - if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --release --locked --target ${{ matrix.target }} -p ont-offload -p ont-runsim --features ont-offload/tui
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p ont-offload -p ont-runsim --features ont-offload/tui,ont-offload/report
       - name: Package
         shell: bash
         run: |
