@@ -68,7 +68,16 @@ The dashboard's user only needs read access to the state folder and the log file
 
 ## What it shows
 
-From top to bottom: a header with host, version, daemon status, how long ago the state was written and a ticking clock; the alert banner; the share (guard, free space, outage with backlog and next check) and throughput (sparkline against `rate_limit`, busy and stalled workers); the runs; the last cleanup pass; open and cleared alerts; and the event stream or the log.
+From top to bottom:
+
+- **Header**, left: host, version, daemon status, how long ago the state was written, a ticking clock and the theme. Right: the **destination** share (status, mount and file system, guard, free space on the share and the source, and during an outage its level, duration, backlog and next check).
+- The theme's decoration band (matrix rain, synthwave horizon) and the alert banner.
+- **Alerts** (open and cleared) beside **throughput** (sparkline against `rate_limit`, busy and stalled workers).
+- **Runs**, one per line in fixed columns: severity, run path, phase, progress bar, files committed of selected, bytes, then failures, errors, mismatches, backlog and ETA.
+- The last **cleanup** pass, when cleanup is configured.
+- **Events** (or the log with `l`) across the full width: severity, time, run path and message.
+
+A run path longer than its column is shortened in the middle, `minion-room-2/exper...1200_X1_PAW00001_abcdef12`, so its start and the flow cell and run id at its end stay readable; an event message too long for the pane is cut at its end with `…`. Select a run or an event with `↑` `↓` and press `Enter` for a popup with everything the snapshot or the event says about it, paths and messages in full (`Esc` closes it). In the event pane `↑` goes to older events; while an older event is selected, new events do not move the selection, and `Home` returns to the newest.
 
 - **Severity is always written** as a word and a symbol, `● OK`, `· INFO`, `▲ WARN`, `✖ FAIL`, `◷ STALE`, in every theme, never by colour alone. Failures are bold and reversed (or in a strong colour) in every theme.
 - **A run shows `complete`** only when the daemon reports phase `complete` and a manifest digest; otherwise `complete?`. Failed files and errors are always on the run's line. Numbers are shown as the daemon reports them; the dashboard derives nothing of its own.
@@ -85,9 +94,11 @@ Gaps in the event sequence, unreadable lines and daemon restarts are counted at 
 
 | Key | Action |
 | --- | --- |
-| `q`, `Esc`, `Ctrl-C` | quit (nothing is changed anywhere) |
+| `q`, `Ctrl-C` | quit (nothing is changed anywhere) |
+| `Esc` | close the detail popup, else quit |
 | `Tab` | next pane (runs, alerts, events) |
-| `↑` `↓` `PgUp` `PgDn` `Home` | scroll the pane |
+| `↑` `↓` `PgUp` `PgDn` `Home` | select a run or event, scroll the alerts (in a popup: scroll it) |
+| `Enter` | details of the selected run or event: full paths and every value |
 | `a` | acknowledge the alerts on screen (hides the banner here only) |
 | `f` | event filter: all, warnings and errors, errors |
 | `l` | show the log instead of the events |
@@ -101,7 +112,7 @@ Gaps in the event sequence, unreadable lines and daemon restarts are counted at 
 | Theme | Look |
 | --- | --- |
 | `plain` | The terminal's own colours with red, yellow and green for severity. The safe choice for any terminal and for screenshots in reports. |
-| `matrix` | Green on black with falling katakana in the header. Failures are white and reversed. |
+| `matrix` | Green on black with falling katakana in a band under the header. Failures are white and reversed. |
 | `phosphor` | Amber on dark brown like an old monochrome terminal, double frames and a blinking block cursor after the newest event. |
 | `synthwave` | Magenta and cyan on deep purple, thick frames and a moving horizon under the header. |
 

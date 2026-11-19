@@ -1,0 +1,40 @@
+┌ ont-offload dashboard (read-only) ─────────────────────────────┐┌ Destination ───────────────────────────────────────────────────┐
+│ONT-OFFLOAD gridion-01 v0.6.0                                   ││● OK ok  /mnt/nas/ont (nfs4)                                    │
+│● OK running   state written 1s ago                             ││guard passed   share free 18.21 TB   source free 2.10 TB        │
+│10:00:01 UTC   theme plain                                      ││                                                                │
+│                                                                ││                                                                │
+│                                                                ││                                                                │
+└────────────────────────────────────────────────────────────────┘└────────────────────────────────────────────────────────────────┘
+┌ Alerts (0 open) ───────────────────────────────────────────────┐┌ Throughput 82 MB/s of 100 MB/s ────────────────────────────────┐
+│● OK no open alerts                                             ││▃                                                               │
+│                                                                ││█                                                               │
+│     ┌ Run (Esc to close, ↑↓ scroll) ───────────────────────────────────────────────────────────────────────────────────────┐     │
+│     │· INFO          minion-room-2/experiment_with_a_very_long_descriptive_name/sample_barcodes_01_to_24/20261114_1200_X1_P│     │
+│     │                AW00001_abcdef12                                                                                      │     │
+└─────│                                                                                                                      │─────┘
+┌ Runs│phase           live                                                                                                  │─────┐
+│▸· IN│run id          id-minion-room-2/experiment_with_a_very_long_descriptive_name/sample_barcodes_01_to_24/20261114_1200_X│5m 0s│
+│ ● OK│                1_PAW00001_abcdef12                                                                                   │     │
+│     │source          /data/minion-room-2/experiment_with_a_very_long_descriptive_name/sample_barcodes_01_to_24/20261114_120│     │
+│     │                0_X1_PAW00001_abcdef12                                                                                │     │
+│     │destination     /mnt/nas/ont/minion-room-2/experiment_with_a_very_long_descriptive_name/sample_barcodes_01_to_24/20261│     │
+│     │                114_1200_X1_PAW00001_abcdef12                                                                         │     │
+│     │files           790 of 812 committed                                                                                  │     │
+│     │bytes           420 GB                                                                                                │     │
+│     │waiting         0 file(s), 0 B                                                                                        │     │
+│     │copying         2 file(s)                                                                                             │     │
+│     │eta             15m 0s                                                                                                │     │
+└─────│mismatches      0 (each retried)                                                                                      │─────┘
+┌ Even│complete marker -                                                                                                     │─────┐
+│ · IN│manifest sha256 -                                                                                                     │_on_…│
+│ · IN└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘     │
+│ · INFO  10:00:00                                   committed pod5/batch_0003.pod5                                                │
+│                                                                                                                                  │
+│                                                                                                                                  │
+│                                                                                                                                  │
+│                                                                                                                                  │
+│                                                                                                                                  │
+│                                                                                                                                  │
+│                                                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ q quit  Tab pane  ↑↓ select  Enter details  a acknowledge  f filter  l log  t theme  b bell on  s sources  ? help

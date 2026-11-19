@@ -11,4 +11,4 @@ probability_before = "remote"
 probability_after = ""
 
 [links]
-controlled_by = ["SRS-TUI-006", "SRS-TUI-007"]
+controlled_by = ["SRS-TUI-006", "SRS-TUI-007", "SRS-TUI-010"]

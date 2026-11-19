@@ -70,18 +70,42 @@ fn next_theme(kind: TuiTheme) -> TuiTheme {
 }
 
 fn key(code: KeyCode, mods: KeyModifiers, m: &mut Model, ui: &mut Ui, no_color: bool) -> Action {
+    if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL) {
+        return Action::Quit;
+    }
+    if ui.detail.is_some() {
+        match code {
+            KeyCode::Char('q') => return Action::Quit,
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Backspace => ui.detail = None,
+            KeyCode::Up | KeyCode::Char('k') => {
+                ui.detail_scroll = ui.detail_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => ui.detail_scroll += 1,
+            KeyCode::PageUp => ui.detail_scroll = ui.detail_scroll.saturating_sub(10),
+            KeyCode::PageDown => ui.detail_scroll += 10,
+            KeyCode::Home => ui.detail_scroll = 0,
+            _ => return Action::None,
+        }
+        return Action::Redraw;
+    }
     match code {
         KeyCode::Char('q') | KeyCode::Esc => return Action::Quit,
-        KeyCode::Char('c') if mods.contains(KeyModifiers::CONTROL) => return Action::Quit,
         KeyCode::Tab => ui.focus = ui.focus.next(),
-        KeyCode::Up | KeyCode::Char('k') => ui.scroll_by(1),
-        KeyCode::Down | KeyCode::Char('j') => ui.scroll_by(-1),
-        KeyCode::PageUp => ui.scroll_by(10),
-        KeyCode::PageDown => ui.scroll_by(-10),
+        KeyCode::Up | KeyCode::Char('k') => ui.move_by(-1),
+        KeyCode::Down | KeyCode::Char('j') => ui.move_by(1),
+        KeyCode::PageUp => ui.move_by(-10),
+        KeyCode::PageDown => ui.move_by(10),
         KeyCode::Home => ui.scroll = [0; 3],
+        KeyCode::Enter => ui.open_detail(m),
         KeyCode::Char('a') => m.acknowledge(),
-        KeyCode::Char('f') => ui.filter = ui.filter.next(),
-        KeyCode::Char('l') => ui.show_log = !ui.show_log,
+        KeyCode::Char('f') => {
+            ui.filter = ui.filter.next();
+            ui.scroll[2] = 0;
+        }
+        KeyCode::Char('l') => {
+            ui.show_log = !ui.show_log;
+            ui.scroll[2] = 0;
+        }
         KeyCode::Char('t') => ui.theme = Theme::new(next_theme(ui.theme.kind), no_color),
         KeyCode::Char('b') => ui.bell = !ui.bell,
         KeyCode::Char('s') => {
@@ -94,6 +118,7 @@ fn key(code: KeyCode, mods: KeyModifiers, m: &mut Model, ui: &mut Ui, no_color: 
         }
         _ => return Action::None,
     }
+    ui.clamp(m);
     Action::Redraw
 }
 
@@ -129,7 +154,9 @@ pub fn run(launch: &Launch, fs: &dyn Fs) -> Result<()> {
     loop {
         let now = Instant::now();
         if now >= next_read {
+            let anchor = ui.anchor(&model);
             model.refresh(fs, SystemTime::now());
+            ui.follow(&model, anchor);
             // No bell for what was already open at start: the banner shows it.
             if ui.bell && model.new_alerts > 0 && !first {
                 let mut out = std::io::stdout();
@@ -160,5 +187,51 @@ pub fn run(launch: &Launch, fs: &dyn Fs) -> Result<()> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::fsio::RealFs;
+    use crate::tui::fixtures::{at, normal, t0, write_state};
+
+    /// Verifies: SRS-TUI-010
+    #[test]
+    fn enter_opens_the_details_and_esc_closes_them_before_quitting() {
+        let dir = tempfile::tempdir().unwrap();
+        write_state(dir.path(), &normal(&at(0)));
+        let mut m = Model::new(dir.path(), None);
+        m.refresh(&RealFs, t0() + Duration::from_secs(1));
+        let mut ui = Ui::new(
+            Theme::new(TuiTheme::Plain, false),
+            false,
+            String::new(),
+            t0(),
+        );
+        let none = KeyModifiers::NONE;
+        assert!(matches!(
+            key(KeyCode::Down, none, &mut m, &mut ui, false),
+            Action::Redraw
+        ));
+        key(KeyCode::Down, none, &mut m, &mut ui, false);
+        assert_eq!(ui.scroll[0], 1, "kept on the last run");
+        key(KeyCode::Enter, none, &mut m, &mut ui, false);
+        let id = m.snapshot.as_ref().unwrap().runs[1].run_id.clone();
+        assert_eq!(ui.detail, Some(super::super::view::Detail::Run(id)));
+        key(KeyCode::Down, none, &mut m, &mut ui, false);
+        assert_eq!(ui.detail_scroll, 1, "arrows scroll the popup");
+        assert_eq!(ui.scroll[0], 1, "not the list");
+        assert!(matches!(
+            key(KeyCode::Esc, none, &mut m, &mut ui, false),
+            Action::Redraw
+        ));
+        assert!(ui.detail.is_none());
+        assert!(matches!(
+            key(KeyCode::Esc, none, &mut m, &mut ui, false),
+            Action::Quit
+        ));
     }
 }
