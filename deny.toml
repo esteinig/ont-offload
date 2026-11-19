@@ -7,6 +7,16 @@ yanked = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained; compile-time only via ratatui, no fix upstream yet" },
   { id = "RUSTSEC-2026-0542", reason = "chrono is unmaintained; no safe update available for now" },
+  { id = "RUSTSEC-2025-0141", reason = "bincode 1.3.3 unmaintained, no fix (via syntect <- typst-library). The bincode team calls 1.3.3 complete; only decodes syntect's syntax/theme dumps built into typst, never external input." },
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.36.2/0.38.4 quadratic duplicate-attribute check (via citationberg <- hayagriva and plist <- syntect, typst 0.13). Fix is quick-xml >= 0.41, which neither parent accepts; typst >= 0.14 needs Rust 1.88. Reachable only when a template loads CSL styles or plist themes; ours are embedded and do neither." },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml NsReader unbounded namespace allocation; same path and constraint as RUSTSEC-2026-0194. No untrusted XML is parsed: templates and inputs are embedded or written by ont-offload." },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz 0.18 unmaintained, no fix (via typst-layout). Shapes text only with the IBM Plex fonts embedded in the binary." },
+  { id = "RUSTSEC-2026-0009", reason = "time 0.3.45 stack exhaustion when parsing crafted input (via plist <- syntect <- typst-library). time >= 0.3.47 requires Rust 1.88 (toolchain pinned to 1.85). ont-offload never passes external text to time's parsers; plist is only used for typst's built-in syntax data." },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser 0.24 unmaintained, no fix (via fontdb/rustybuzz/typst). Parses only the IBM Plex fonts embedded in the binary; no system or user fonts are loaded." },
+  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml unmaintained, no fix (via serde_yaml <- hayagriva <- typst-library). YAML bibliographies are never loaded; templates are embedded and use no bibliography." },
+  { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no fix (via syntect <- typst-library). Only used by syntect to load .sublime-syntax files, which typst ships pre-compiled; no YAML input from users." },
+  { id = "RUSTSEC-2024-0436", reason = "paste unmaintained, no fix (proc-macro via biblatex <- hayagriva <- typst-library). Build-time macro only, no runtime code or input." },
+  { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained, no fix (direct dependency and ont-runsim). Informational only, no vulnerability; used to format timestamps/durations and parse durations from the operator's own config. Replace with jiff or std when convenient." },
 ]
 
 [licenses]
