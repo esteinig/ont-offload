@@ -91,13 +91,18 @@ impl Markers {
     }
 }
 
-/// A run found below `source.root`.
+/// A run (or a `ready` dataset) found below a source root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectedRun {
+    /// Index of its source in `Config::sources`.
+    pub source: usize,
     /// Run folder (real path below the resolved source root).
     pub path: PathBuf,
     /// Run folder relative to the source root.
     pub rel: PathBuf,
+    /// Name shown in logs, events and the dashboard: `rel`, prefixed by
+    /// the source name when several sources are configured.
+    pub label: String,
     /// Name of the entry that matched a run marker.
     pub marker: String,
     /// Name of the entry that matched a complete marker, if any.
@@ -111,6 +116,20 @@ impl DetectedRun {
         self.path
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+    }
+
+    /// The same run attributed to source `i` of `cfg` (sets `source` and `label`).
+    ///
+    /// Implements: SRS-SRC-005
+    #[must_use]
+    pub fn of_source(mut self, cfg: &Config, i: usize) -> Self {
+        self.source = i;
+        let rel = self.rel.to_string_lossy();
+        self.label = match cfg.sources.get(i) {
+            Some(s) if cfg.several() => format!("{}/{rel}", s.name),
+            _ => rel.into_owned(),
+        };
+        self
     }
 }
 
@@ -140,7 +159,9 @@ pub fn inspect(
     };
     let rel = dir.strip_prefix(root).unwrap_or(dir).to_path_buf();
     Ok(Some(DetectedRun {
+        source: 0,
         path: dir.to_path_buf(),
+        label: rel.to_string_lossy().into_owned(),
         rel,
         marker: marker.name.to_string_lossy().into_owned(),
         complete: complete_markers
@@ -149,38 +170,59 @@ pub fn inspect(
     }))
 }
 
-/// Find runs below the resolved `source.root` by layout and run markers.
+/// Find runs below every source root by layout and run markers.
 ///
-/// Symlinked folders are never followed, ignored patterns are skipped, and
-/// in `any-depth` layout a run inside another run is not reported.
+/// Symlinked folders are never followed, ignored patterns and the roots of
+/// other sources inside a root are skipped, and in `any-depth` and `ready`
+/// layouts a run inside another run is not reported (for `ready`, it is
+/// part of the outer dataset).
 ///
-/// Implements: SRS-SEL-006
+/// Implements: SRS-SEL-006, SRS-SRC-001, SRS-SRC-002
 ///
 /// # Errors
-/// I/O errors listing the source root.
+/// I/O errors listing the source root (with one source; with several, an
+/// unreadable root is a warning so the others go on).
 pub fn detect(cfg: &Config, fs: &dyn Fs) -> Result<Detection> {
-    let root = &cfg.source.root.resolved;
-    let ignore = globset(&cfg.source.ignore)?;
-    let runs_m = Markers::new(&cfg.source.run_markers)?;
-    let done_m = Markers::new(&cfg.source.complete_markers)?;
     let mut out = Detection::default();
-    let max_depth = match cfg.source.layout {
+    for i in 0..cfg.sources.len() {
+        if let Err(e) = detect_source(cfg, i, fs, &mut out) {
+            if !cfg.several() {
+                return Err(e);
+            }
+            out.warnings.push(format!(
+                "source {}: cannot read {}: {e}",
+                cfg.sources[i].name,
+                escape_control(&cfg.sources[i].root.resolved.to_string_lossy())
+            ));
+        }
+    }
+    out.runs.sort_by(|a, b| a.label.cmp(&b.label));
+    Ok(out)
+}
+
+fn detect_source(cfg: &Config, i: usize, fs: &dyn Fs, out: &mut Detection) -> Result<()> {
+    let src = &cfg.sources[i];
+    let root = &src.root.resolved;
+    let ignore = globset(&src.ignore)?;
+    let runs_m = Markers::new(&src.run_markers)?;
+    let done_m = Markers::new(&src.complete_markers)?;
+    let max_depth = match src.layout {
         Layout::Minknow => 3,
-        Layout::AnyDepth => 12,
+        Layout::AnyDepth | Layout::Ready => 12,
     };
     // (folder, depth below root)
     let mut stack = vec![(root.clone(), 0usize)];
     while let Some((dir, depth)) = stack.pop() {
         if depth > 0 {
             let rel = dir.strip_prefix(root).unwrap_or(&dir);
-            if ignore.is_match(rel) {
+            if ignore.is_match(rel) || src.skip.iter().any(|s| *s == dir) {
                 continue;
             }
-            let check = cfg.source.layout == Layout::AnyDepth || depth == 3;
+            let check = src.layout != Layout::Minknow || depth == 3;
             if check {
                 match inspect(fs, root, &dir, &runs_m, &done_m) {
                     Ok(Some(run)) => {
-                        out.runs.push(run);
+                        out.runs.push(run.of_source(cfg, i));
                         continue; // never descend into a run
                     }
                     Ok(None) => {}
@@ -225,8 +267,7 @@ pub fn detect(cfg: &Config, fs: &dyn Fs) -> Result<Detection> {
             }
         }
     }
-    out.runs.sort_by(|a, b| a.rel.cmp(&b.rel));
-    Ok(out)
+    Ok(())
 }
 
 fn is_dir_link(fs: &dyn Fs, p: &Path) -> bool {

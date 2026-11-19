@@ -1,0 +1,14 @@
+id = "HAZ-020"
+type = "hazard"
+title = "User dataset offloaded before the user finished dropping it"
+status = "draft"
+cause = "A user writes the READY marker before every file of the dataset is in place, or keeps adding files after the dataset was completed"
+harm = "An incomplete dataset on the share is marked COMPLETE and analysed or archived as if whole; files added later are missing from the copy"
+severity = "serious"
+probability_before = "occasional"
+# v0.8: a dataset is offloaded only once READY is there (SRS-SRC-002), each file only after it is unchanged for settle, and the dataset is completed only after settle_after_complete; files that change or appear while it is watched (watch_completed_for) withdraw COMPLETE and are copied again (SRS-LIVE-004). The user guide tells users to write READY last. Proposed residual probability once reviewed: remote.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-SRC-002", "SRS-LIVE-004"]

@@ -1,0 +1,13 @@
+id = "SRS-SRC-005"
+type = "requirement"
+title = "Source shown with each run"
+status = "draft"
+release = "v0.8"
+text = """
+With several sources, every run is named <source name>/<path below its root> in logs, events, alerts, check-config, status and the dashboard; state.json gives each run's source_name and run.json on the share records it.
+"""
+verification = "Unit: labels and run.json; controller: state.json names and source_name, schema valid; integration: check-config and run output"
+
+[links]
+allocated_to = ["SWI-RUN", "SWI-SCHED", "SWI-STATE"]
+mitigates = []

@@ -1,0 +1,14 @@
+id = "HAZ-021"
+type = "hazard"
+title = "Data of different sources mixed on the share"
+status = "draft"
+cause = "Two sources map into the same destination folder, a MinKNOW folder is named like a transfer folder, a source root inside another is scanned twice, or a dataset is marked around a subfolder already offloaded on its own"
+harm = "Files of one run or dataset are overwritten by, or attributed to, another; wrong data reaches analysis"
+severity = "serious"
+probability_before = "occasional"
+# v0.8: names, roots and destination folders must be distinct and not nested (SRS-SRC-003); a nested source root is scanned only by the inner source (SRS-SRC-001); a run mapped into another source's folder, or whose folder holds or lies inside another claimed run's folder, is refused with an alert and nothing is written (SRS-SRC-003); claims per destination folder already refuse a second source run (SRS-SEL-007). Proposed residual probability once reviewed: improbable.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-SRC-003", "SRS-SRC-001", "SRS-SEL-007"]

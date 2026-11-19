@@ -2,7 +2,7 @@
 
 Every known limitation of the current release is listed here with the hazard it relates to, what controls it today, and the control planned for a later release. Limitations that are already controlled are listed too, because the control is often a rule for the operator or leaves a remainder worth knowing. Hazards and requirements are in [`compliance/`](https://github.com/esteinig/ont-offload/tree/dev/compliance); the planned versions follow the [staged plan](../developer-guide/architecture.md#staged-implementation-plan).
 
-Status as of v0.7.
+Status as of v0.8.
 
 ## Open: controls planned
 
@@ -12,7 +12,14 @@ Status as of v0.7.
 | **Deletion is final, and the receipt is trusted.** With `gate = "storage-verify"`, a `VERIFIED.json` with the right digest, counts and time opens the gate; ont-offload does not check who wrote it. | HAZ-009 (critical) | SRS-DEL-001 to 006: off by default, four gates, a record of every file before it is removed, `DELETED.json`, never during an outage. **Operator rule:** run `delete = "dry-run"` for two weeks and review `cleanup-reports.jsonl` before `on`; only let the receiving side's verification write `VERIFIED.json`; use `gate = "both"` where the share is not trusted. | Residual risk set after the dry-run review (release gate). |
 | **A change to a run after `watch_completed_for` is noticed only at the next start.** Completed runs are watched for 24 h by default, then forgotten. | HAZ-012 (serious) | SRS-RES-004: at every start, a completed run whose files changed is withdrawn and offloaded again. **Operator rule:** raise `watch_completed_for` if runs are re-processed later than a day after they finish, or restart the service after re-processing an old run. | None planned; the window is a setting. |
 | **The dashboard is tested on text renders, not on real terminals.** Symbols (`● ▲ ✖ ◷`), colours and the bell depend on the terminal emulator and font used over SSH. | HAZ-015 (minor) | SRS-TUI-004: severity is also a word; golden renders and a contrast check per theme in CI. **Operator rule:** check each theme you use on the site's terminals once (`t` cycles them), and use `plain` or `NO_COLOR` where symbols do not show. | Site acceptance: dashboard checked on the sequencer's terminal with an injected outage. |
+| **A user dataset is only as complete as the user's `READY`.** ont-offload cannot know whether a user is still copying into a folder they marked. | HAZ-020 (serious) | SRS-SRC-002: nothing is offloaded before `READY`; each file waits for `settle`, completion for `settle_after_complete`; changes within `watch_completed_for` withdraw `COMPLETE` and are copied again. **Operator rule:** tell users to write `READY` last and to start a new folder for later additions ([Several sources and user transfer folders](transfer-folders.md#how-users-drop-a-dataset-layout-ready)). | Site acceptance with real user drops. |
 | **The nightly NFS and Samba test has not run on GitHub yet.** | HAZ-007 | SRS-RES-005 is verified on a fake clock and by a local tmpfs rehearsal. | The first nightly run closes the gap. |
+
+## Controlled in v0.8
+
+| Limitation in v0.7 | Hazard | Control in v0.8 | What remains |
+| --- | --- | --- | --- |
+| **One source per daemon**: a transfer folder for user datasets beside the MinKNOW runs needed a second service, with its own rate limit and outage handling, and user datasets had no marker that says they are complete. | HAZ-020, HAZ-021, HAZ-022 | SRS-SRC-001 to 005: `[[source]]` entries in one daemon, layout `ready` with the `READY` marker, distinct destination folders and refusal of runs that would mix, cleanup off by default for user datasets, the source name on every run. | See the open row above on `READY`. |
 
 ## Controlled in v0.7
 

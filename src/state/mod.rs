@@ -236,8 +236,14 @@ pub struct Totals {
 pub struct RunState {
     /// Run id.
     pub run_id: String,
-    /// Run path relative to the source root.
+    /// Run path relative to the source root (prefixed by the source name
+    /// when several sources are configured).
     pub name: String,
+    /// Source name, only when several sources are configured.
+    ///
+    /// Implements: SRS-SRC-005
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
     /// Source folder.
     pub source: String,
     /// Destination folder.

@@ -1,0 +1,14 @@
+id = "HAZ-022"
+type = "hazard"
+title = "User datasets deleted from the sequencer unexpectedly"
+status = "draft"
+cause = "Cleanup is applied to a transfer folder whose users expect their files to stay, or to runs of a source no longer in the configuration"
+harm = "A user loses the local copy of a dataset they still work with; if the share copy is later lost, the data is gone"
+severity = "serious"
+probability_before = "occasional"
+# v0.8: cleanup is off by default for ready sources and turning it on is warned about (SRS-SRC-004); the pass considers only runs of configured sources with cleanup on, and cleanup <path> refuses others (SRS-SRC-004); every deletion still needs all four gates (SRS-DEL-002). Proposed residual probability once reviewed: improbable.
+# Residual probability is set when the risk controls are verified.
+probability_after = ""
+
+[links]
+controlled_by = ["SRS-SRC-004", "SRS-DEL-002"]

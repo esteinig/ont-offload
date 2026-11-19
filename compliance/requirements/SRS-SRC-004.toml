@@ -1,0 +1,13 @@
+id = "SRS-SRC-004"
+type = "requirement"
+title = "Cleanup per source"
+status = "draft"
+release = "v0.8"
+text = """
+Each source has a cleanup switch; it is off by default for ready sources (user datasets) and on for the others. The cleanup pass considers only runs of a configured source with cleanup on, so runs of a source that was removed from the configuration are never deleted, and `cleanup <path>` refuses a run of a source with cleanup off. Turning cleanup on for a ready source is accepted with a warning.
+"""
+verification = "Unit: defaults and the warning; controller: with deletion on, the MinKNOW run is deleted and the user dataset is kept; integration: cleanup --dry-run on a dataset path is refused"
+
+[links]
+allocated_to = ["SWI-CONFIG", "SWI-CLEANUP", "SWI-CLI"]
+mitigates = ["HAZ-022"]

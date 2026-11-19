@@ -363,7 +363,12 @@ impl Pass<'_> {
             finished_at: String::new(),
             mode: if self.delete { "delete" } else { "dry-run" }.into(),
             gate: gate_name(self.cfg.cleanup.gate).into(),
-            source_free_bytes: self.fs.free_space(&self.cfg.source.root.resolved).ok(),
+            source_free_bytes: self
+                .cfg
+                .sources
+                .iter()
+                .filter_map(|s| self.fs.free_space(&s.root.resolved).ok())
+                .min(),
             only_when_free_below: self.cfg.cleanup.only_when_free_below,
             runs: Vec::new(),
             stopped: None,
@@ -382,6 +387,7 @@ impl Pass<'_> {
                     && j.deleted_at.is_none()
                     && !self.skip.contains(&j.id)
                     && only_id.as_ref().is_none_or(|o| *o == j.id)
+                    && self.source_allows(j)
             })
             .collect();
         journals.sort_by(|a, b| a.completed_at.cmp(&b.completed_at).then(a.id.cmp(&b.id)));
@@ -491,6 +497,18 @@ impl Pass<'_> {
                 .append_sync(&self.cfg.state_dir.resolved.join(REPORTS), &line)?;
         }
         Ok(report)
+    }
+
+    /// Only runs of a configured source with `cleanup` on are deleted: a
+    /// `ready` source (user datasets) is off by default, and a run whose
+    /// source is no longer configured is left alone.
+    ///
+    /// Implements: SRS-SRC-004
+    fn source_allows(&self, j: &Journal) -> bool {
+        let (source, _) = self.paths(j);
+        self.cfg
+            .source_index_of(&source)
+            .is_some_and(|i| self.cfg.sources[i].cleanup)
     }
 
     fn paths(&self, j: &Journal) -> (PathBuf, PathBuf) {

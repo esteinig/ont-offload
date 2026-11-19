@@ -212,6 +212,54 @@ fn check_config_lists_runs_and_their_destinations() {
     assert!(left.is_empty(), "{left:?}");
 }
 
+/// A transfer folder as a second source: `check-config` lists its dataset
+/// with its destination, `run` offloads it, and cleanup refuses it.
+///
+/// Verifies: SRS-SRC-001, SRS-SRC-002, SRS-SRC-004, SRS-SRC-005
+#[test]
+fn a_transfer_folder_source_through_the_binary() {
+    let Some(env) = Env::new(true) else { return };
+    let transfer = env.dir.path().join("transfer");
+    let set = transfer.join("alice/set1");
+    std::fs::create_dir_all(set.join("reads")).expect("mkdir");
+    std::fs::write(set.join("reads/a.fastq"), "aaaa").expect("write");
+    std::fs::write(set.join("READY"), "").expect("write");
+    let text = std::fs::read_to_string(&env.config).expect("config");
+    let text = text.replace("[source]\n", "[[source]]\nname = \"runs\"\n")
+        + &format!(
+            "[[source]]\nname = \"transfer\"\nroot = {:?}\nlayout = \"ready\"\ndest = \"transfer\"\n",
+            transfer.to_str().expect("utf8")
+        );
+    std::fs::write(&env.config, text).expect("config");
+    let dest = env.share.path().join("transfer/alice/set1");
+    env.cmd(&["check-config"]).assert().success().stdout(
+        predicate::str::contains("runs detected: 1")
+            .and(predicate::str::contains(format!(
+                "transfer/alice/set1  [READY; complete: READY] -> {}",
+                dest.display()
+            )))
+            .and(predicate::str::contains("source[2] cleanup")),
+    );
+    env.cmd(&["run", set.to_str().expect("utf8")])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("transfer/alice/set1 -> ")
+                .and(predicate::str::contains("COMPLETE")),
+        );
+    assert_eq!(
+        std::fs::read_to_string(dest.join("reads/a.fastq")).expect("copy"),
+        "aaaa"
+    );
+    env.cmd(&["verify", dest.to_str().expect("utf8"), "--source"])
+        .assert()
+        .success();
+    env.cmd(&["cleanup", "--dry-run", set.to_str().expect("utf8")])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("never deletes its runs"));
+}
+
 fn copy_tree(from: &Path, to: &Path, skip_top: &[&str]) {
     for e in std::fs::read_dir(from).expect("ls") {
         let e = e.expect("entry");

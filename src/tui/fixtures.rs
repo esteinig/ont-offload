@@ -32,6 +32,7 @@ fn run(name: &str, phase: &str) -> RunState {
     RunState {
         run_id: format!("id-{name}"),
         name: name.into(),
+        source_name: None,
         source: format!("/data/{name}"),
         destination: format!("/mnt/nas/ont/{name}"),
         phase: phase.into(),

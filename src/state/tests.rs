@@ -64,6 +64,7 @@ fn sample() -> Snapshot {
         runs: vec![RunState {
             run_id: "abc".into(),
             name: "exp/s/run".into(),
+            source_name: None,
             source: "/data/exp/s/run".into(),
             destination: "/mnt/nas/ont/exp/s/run".into(),
             phase: "live".into(),

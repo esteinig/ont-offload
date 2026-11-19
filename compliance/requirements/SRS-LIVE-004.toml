@@ -10,4 +10,4 @@ verification = "Fake-clock test: file added after COMPLETE (found by folder time
 
 [links]
 allocated_to = ["SWI-SCHED", "SWI-RUN", "SWI-JOURNAL"]
-mitigates = ["HAZ-012"]
+mitigates = ["HAZ-012", "HAZ-020"]

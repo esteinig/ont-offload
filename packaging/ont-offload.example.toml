@@ -8,12 +8,26 @@ dest_starts_at = "experiment"
 
 [source]
 root = "/data"
-layout = "minknow"               # or "any-depth"
+layout = "minknow"               # "any-depth", or "ready" for user datasets
 run_markers = ["sample_sheet_*.csv"]   # a pattern ending in "/" matches a folder, e.g. "pod5/"
 complete_markers = ["final_summary_*.txt"]
 ignore = ["lost+found", "**/.*", "ont-runsim"]
 # Between full listings, rescans list only folders that changed.
 full_rescan_every = "10m"
+# name = "runs"                 # shown before each run when there are several sources
+# dest = ""                     # folder below dest_root for this source ("" = dest_root)
+# dest_starts_at = "experiment" # default: the top-level setting
+# cleanup = true                # may [cleanup] delete runs of this source (default: not for "ready")
+
+# Several sources (v0.8): write [[source]] instead of [source] for each, for
+# example the MinKNOW runs above plus a folder where users drop datasets of
+# their own, each marked with an empty READY file when it is complete:
+#
+# [[source]]
+# name = "transfer"
+# root = "/data/transfer"
+# layout = "ready"              # a folder with READY, and all below it, is one dataset
+# dest = "transfer"             # dest_root/transfer/<path below /data/transfer>/
 
 [selection]
 include = ["**"]

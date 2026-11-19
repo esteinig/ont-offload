@@ -79,7 +79,7 @@ fn example_config_parses_strictly() {
     let raw = parse(text).unwrap();
     assert_eq!(raw.bandwidth.workers, 4);
     assert_eq!(raw.bandwidth.rate_limit, "100MB/s");
-    assert_eq!(raw.source.root, "/data");
+    assert_eq!(raw.source[0].root, "/data");
 }
 
 /// Verifies: SRS-CFG-001, SRS-CFG-002, SRS-CFG-004
@@ -94,7 +94,7 @@ fn minimal_config_is_valid_with_defaults() {
     assert_eq!(c.transfer.verify, VerifyMode::Inflight);
     assert_eq!(c.transfer.file_mode, 0o640);
     assert_eq!(c.cleanup.delete, DeleteMode::Off);
-    assert_eq!(c.source.run_markers, vec!["sample_sheet_*.csv"]);
+    assert_eq!(c.sources[0].run_markers, vec!["sample_sheet_*.csv"]);
     assert!(loaded.warnings.iter().any(|w| w.contains("unlimited")));
     let summary = c.summary();
     assert!(summary.contains("4 workers, total unlimited"), "{summary}");
@@ -388,5 +388,167 @@ fn tui_section_is_validated_and_read_without_path_checks() {
     assert!(
         load(&p, &env.fs).is_err(),
         "while the daemon would refuse it"
+    );
+}
+
+impl Env {
+    /// Two sources, MinKNOW runs in `data` and user datasets in `transfer`,
+    /// with `extra` lines for the second `[[source]]`.
+    fn two_sources(&self, first: &str, second: &str) -> String {
+        std::fs::create_dir_all(self.dir.path().join("transfer")).unwrap();
+        format!(
+            "dest_root = {}\ntarget_id = \"lab-nas-01\"\nstate_dir = {}\n\
+             [[source]]\nroot = {}\n{first}\n\
+             [[source]]\nroot = {}\nlayout = \"ready\"\n{second}\n",
+            q(&self.p("mnt/share")),
+            q(&self.p("state")),
+            q(&self.p("data")),
+            q(&self.p("transfer")),
+        )
+    }
+}
+
+/// Verifies: SRS-SRC-001, SRS-SRC-002, SRS-SRC-004
+#[test]
+fn several_sources_load_with_their_own_settings_and_ready_defaults() {
+    let env = Env::new();
+    let c = env
+        .check(&env.two_sources("dest_starts_at = \"sample\"", "dest = \"transfer\""))
+        .unwrap()
+        .config;
+    assert_eq!(c.sources.len(), 2);
+    assert!(c.several());
+    let (runs, drops) = (&c.sources[0], &c.sources[1]);
+    assert_eq!(runs.name, "data");
+    assert_eq!(runs.layout, Layout::Minknow);
+    assert_eq!(runs.run_markers, vec!["sample_sheet_*.csv"]);
+    assert_eq!(runs.dest_starts_at, DestLevel::Sample);
+    assert!(runs.cleanup);
+    assert_eq!(drops.name, "transfer");
+    assert_eq!(drops.run_markers, vec![READY_MARKER]);
+    assert_eq!(drops.complete_markers, vec![READY_MARKER]);
+    assert!(
+        drops.nested_markers().is_empty(),
+        "READY below a dataset is part of it"
+    );
+    assert_eq!(drops.dest, Path::new("transfer"));
+    assert_eq!(drops.dest_starts_at, DestLevel::Experiment);
+    assert!(!drops.cleanup, "user datasets are never deleted by default");
+    let summary = c.summary();
+    assert!(summary.contains("source[2] root"), "{summary}");
+    assert!(
+        summary.contains("dest_root/transfer/<path below the root>/"),
+        "{summary}"
+    );
+    assert!(summary.contains("never deletes its runs"), "{summary}");
+
+    // A single [source] is still one source, named after its folder.
+    let one = env.check(&env.toml("")).unwrap().config;
+    assert_eq!(one.sources.len(), 1);
+    assert!(!one.several());
+
+    // Unknown keys in a [[source]] name the entry.
+    let msg = env.problems(&env.two_sources("", "dest = \"t\"\nmarker = \"READY\""));
+    assert!(msg.contains("source[2]") && msg.contains("marker"), "{msg}");
+
+    // Turning cleanup on for user datasets is allowed, with a warning.
+    let w = env
+        .check(&env.two_sources("", "dest = \"t\"\ncleanup = true"))
+        .unwrap()
+        .warnings;
+    assert!(
+        w.iter().any(|w| w.starts_with("source[2].cleanup")),
+        "{w:?}"
+    );
+}
+
+/// Verifies: SRS-SRC-003
+#[test]
+fn sources_must_not_share_names_roots_or_destination_folders() {
+    let env = Env::new();
+    // Both into dest_root itself.
+    let msg = env.problems(&env.two_sources("", ""));
+    assert!(
+        msg.contains("source[2].dest") && msg.contains("overlaps"),
+        "{msg}"
+    );
+    // Nested destination folders.
+    let msg = env.problems(&env.two_sources("dest = \"runs\"", "dest = \"runs/users\""));
+    assert!(msg.contains("source[2].dest"), "{msg}");
+    // Not a plain relative folder.
+    for bad in ["../elsewhere", "/abs", "a/../b"] {
+        let msg = env.problems(&env.two_sources("", &format!("dest = {}", q(bad))));
+        assert!(msg.contains("source[2].dest"), "{bad}: {msg}");
+    }
+    // The same name twice, and the same root twice.
+    let msg = env.problems(&env.two_sources("name = \"x\"", "name = \"x\"\ndest = \"t\""));
+    assert!(msg.contains("source[2].name"), "{msg}");
+    let same = env
+        .two_sources("", "dest = \"t\"")
+        .replace(&q(&env.p("transfer")), &q(&env.p("data")));
+    let msg = env.problems(&same.replace(
+        "layout = \"ready\"\n",
+        "name = \"again\"\nlayout = \"ready\"\n",
+    ));
+    assert!(
+        msg.contains("source[2].root") && msg.contains("already the root"),
+        "{msg}"
+    );
+    // A name that is not a plain word.
+    let msg = env.problems(&env.two_sources("", "name = \"a b\"\ndest = \"t\""));
+    assert!(msg.contains("source[2].name"), "{msg}");
+}
+
+/// Verifies: SRS-SRC-001, SRS-SRC-003
+#[test]
+fn a_source_inside_another_is_skipped_by_the_outer_one() {
+    let env = Env::new();
+    std::fs::create_dir_all(env.dir.path().join("data/transfer")).unwrap();
+    let text = env
+        .two_sources("", "dest = \"transfer\"")
+        .replace(&q(&env.p("transfer")), &q(&env.p("data/transfer")));
+    let loaded = env.check(&text).unwrap();
+    let inner = std::fs::canonicalize(env.p("data/transfer")).unwrap();
+    assert_eq!(loaded.config.sources[0].skip, vec![inner.clone()]);
+    assert!(loaded.config.sources[1].skip.is_empty());
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.starts_with("source[1].root") && w.contains("left to source transfer")),
+        "{:?}",
+        loaded.warnings
+    );
+    assert_eq!(
+        loaded.config.source_index_of(&inner.join("alice/set1")),
+        Some(1),
+        "the innermost root owns a path"
+    );
+    assert_eq!(
+        loaded
+            .config
+            .source_index_of(&std::fs::canonicalize(env.p("data")).unwrap().join("e/s/r")),
+        Some(0)
+    );
+}
+
+/// Verifies: SRS-SRC-003
+#[test]
+fn a_run_that_would_land_in_another_sources_folder_is_refused() {
+    let env = Env::new();
+    let c = env
+        .check(&env.two_sources("dest_starts_at = \"sample\"", "dest = \"transfer\""))
+        .unwrap()
+        .config;
+    // A MinKNOW sample folder named like the other source's folder.
+    let err = c.dest_of(0, Path::new("exp/transfer/run1")).unwrap_err();
+    assert!(err.contains("source transfer"), "{err}");
+    assert_eq!(
+        c.dest_of(0, Path::new("exp/sample1/run1")).unwrap(),
+        Path::new("sample1/run1")
+    );
+    assert_eq!(
+        c.dest_of(1, Path::new("alice/set1")).unwrap(),
+        Path::new("transfer/alice/set1")
     );
 }

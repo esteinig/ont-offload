@@ -301,7 +301,7 @@ fn selection_applies_globs_and_skips_links_and_reserved_names() {
         "",
         "[selection]\ninclude = [\"**\"]\nexclude = [\"**/.*\", \"**/*.tmp\", \"fastq_pass/**\"]\ndefer_until_complete = [\"sequencing_summary_*.txt\"]",
     );
-    let m = Markers::new(&cfg.source.run_markers).unwrap();
+    let m = Markers::new(&cfg.sources[0].run_markers).unwrap();
     let sel = select(&env.fs, &run, &cfg.selection, &m).unwrap();
     let rels: Vec<&str> = sel.files.iter().map(|f| f.rel.as_str()).collect();
     assert_eq!(
@@ -936,4 +936,128 @@ fn another_copy_is_compared_with_the_manifest_and_nothing_is_written() {
     assert_eq!(all_files(&dest), before.0, "the run is untouched");
     assert!(!dest.join(VERIFIED).exists() && !legacy.join(VERIFIED).exists());
     assert!(journal::compare(&env.fs, &dest, &env.dir.path().join("absent")).is_err());
+}
+
+impl Env {
+    /// MinKNOW runs in `data` and user datasets in `data/transfer` (a
+    /// source inside the other), datasets going to `dest_root/transfer`.
+    fn two_sources(&self) -> Config {
+        std::fs::create_dir_all(self.p("data/transfer")).unwrap();
+        let path = self.dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            format!(
+                "dest_root = {:?}\ntarget_id = {TARGET:?}\nstate_dir = {:?}\n\
+                 [[source]]\nname = \"runs\"\nroot = {:?}\nlayout = \"any-depth\"\n\
+                 [[source]]\nname = \"transfer\"\nroot = {:?}\nlayout = \"ready\"\ndest = \"transfer\"\n\
+                 [transfer]\nmin_free = \"1MB\"\n",
+                self.p("share").to_str().unwrap(),
+                self.p("state").to_str().unwrap(),
+                self.p("data").to_str().unwrap(),
+                self.p("data/transfer").to_str().unwrap(),
+            ),
+        )
+        .unwrap();
+        config::load(&path, &self.fs).unwrap().config
+    }
+}
+
+fn write(path: &Path, text: &str) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, text).unwrap();
+}
+
+/// A folder with READY is one dataset with every subfolder, a READY below
+/// it is part of it, an unmarked folder is not offloaded, and the outer
+/// source never reports the inner one's folders (even with run markers in
+/// them).
+///
+/// Verifies: SRS-SRC-001, SRS-SRC-002, SRS-SRC-005
+#[test]
+fn ready_datasets_are_found_in_their_own_source_and_offloaded_whole() {
+    let env = Env::new();
+    let cfg = env.two_sources();
+    let set = env.p("data/transfer/alice/set1");
+    write(&set.join("reads/a.fastq"), "aaaa");
+    write(&set.join("reads/deeper/b.fastq"), "bbbbbb");
+    write(&set.join("sub/c.txt"), "c");
+    write(&set.join("notes.txt"), "n");
+    // A sample sheet in a dataset does not make it a run of the outer source.
+    write(&set.join("sample_sheet_x.csv"), "s");
+    write(&env.p("data/transfer/bob/unmarked/d.txt"), "d");
+    // A run of the outer source.
+    write(&env.p("data/exp/s/run1/sample_sheet_r.csv"), "r");
+
+    let before = detect(&cfg, &env.fs).unwrap();
+    let labels: Vec<&str> = before.runs.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels, vec!["runs/exp/s/run1"], "no READY yet: {labels:?}");
+
+    // The whole folder and one subfolder marked: one dataset.
+    write(&set.join("READY"), "");
+    write(&set.join("sub/READY"), "");
+    let found = detect(&cfg, &env.fs).unwrap();
+    let labels: Vec<&str> = found.runs.iter().map(|r| r.label.as_str()).collect();
+    assert_eq!(labels, vec!["runs/exp/s/run1", "transfer/alice/set1"]);
+    let ds = found.runs[1].clone();
+    assert_eq!(ds.source, 1);
+    assert_eq!(ds.rel, Path::new("alice/set1"));
+    assert_eq!(
+        ds.complete.as_deref(),
+        Some("READY"),
+        "complete once marked"
+    );
+
+    let guard = env.guard(&cfg);
+    let rep = offload(&cfg, &env.fs, &guard, &ds, false).unwrap();
+    assert!(rep.failed.is_empty(), "{rep:?}");
+    let dest = env.p("share/transfer/alice/set1");
+    assert_eq!(rep.dest, dest);
+    for (rel, text) in [
+        ("reads/a.fastq", "aaaa"),
+        ("reads/deeper/b.fastq", "bbbbbb"),
+        ("sub/READY", ""),
+        ("sub/c.txt", "c"),
+        ("notes.txt", "n"),
+        ("READY", ""),
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(dest.join(rel)).unwrap(),
+            text,
+            "{rel}"
+        );
+    }
+    assert!(dest.join(COMPLETE).exists());
+    let run_json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dest.join(RUN_JSON)).unwrap()).unwrap();
+    assert_eq!(run_json["source_name"], "transfer");
+    assert!(!env.p("share/alice").exists() && !env.p("share/transfer/bob").exists());
+}
+
+/// A subfolder offloaded as a dataset of its own, then its parent marked:
+/// the parent would write into the subfolder's copy, so it is refused.
+///
+/// Verifies: SRS-SRC-003
+#[test]
+fn a_dataset_around_an_offloaded_one_is_refused() {
+    let env = Env::new();
+    let cfg = env.two_sources();
+    let top = env.p("data/transfer/carol/top");
+    write(&top.join("inner/x.txt"), "x");
+    write(&top.join("inner/READY"), "");
+    write(&top.join("y.txt"), "y");
+    let guard = env.guard(&cfg);
+    let inner = detect(&cfg, &env.fs).unwrap().runs.remove(0);
+    assert_eq!(inner.label, "transfer/carol/top/inner");
+    offload(&cfg, &env.fs, &guard, &inner, false).unwrap();
+
+    write(&top.join("READY"), "");
+    let outer = detect(&cfg, &env.fs).unwrap().runs.remove(0);
+    assert_eq!(outer.label, "transfer/carol/top");
+    let err = offload(&cfg, &env.fs, &guard, &outer, false).unwrap_err();
+    assert!(err.to_string().contains("holds the destination"), "{err}");
+    assert!(
+        !env.p("share/transfer/carol/top/y.txt").exists(),
+        "nothing written"
+    );
+    assert!(env.p("share/transfer/carol/top/inner/COMPLETE").exists());
 }

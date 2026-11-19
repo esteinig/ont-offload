@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 /// The release under development. Requirements with this release or an
 /// earlier one must be implemented and verified.
-pub const MILESTONE: &str = "v0.7";
+pub const MILESTONE: &str = "v0.8";
 
 /// Folders scanned for tags (as in `medtrace.toml`).
 pub const SCAN: &[&str] = &["src", "tests"];

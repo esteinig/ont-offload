@@ -43,7 +43,7 @@ pub struct Mount {
 pub struct Guard {
     configured: PathBuf,
     resolved: PathBuf,
-    source_dev: u64,
+    source_devs: Vec<u64>,
     target_id: String,
     allowed: Vec<String>,
     mountinfo: PathBuf,
@@ -111,12 +111,15 @@ pub fn mount_of<'a>(mounts: &'a [Mount], path: &Path) -> Option<&'a Mount> {
 
 impl Guard {
     /// Guard for a validated configuration, reading `/proc/self/mountinfo`.
+    /// The share must be on another device than every source root.
+    ///
+    /// Implements: SRS-SRC-001
     #[must_use]
     pub fn new(cfg: &Config) -> Self {
         Self {
             configured: cfg.dest_root.configured.clone(),
             resolved: cfg.dest_root.resolved.clone(),
-            source_dev: cfg.source.root.dev,
+            source_devs: cfg.sources.iter().map(|s| s.root.dev).collect(),
             target_id: cfg.target_id.clone(),
             allowed: cfg.allowed_fstypes.clone(),
             mountinfo: PathBuf::from(MOUNTINFO),
@@ -219,7 +222,7 @@ impl Guard {
             .metadata(&self.resolved)
             .map_err(|e| self.refuse(format!("cannot be read ({e})")))?
             .dev;
-        if dev == self.source_dev {
+        if self.source_devs.contains(&dev) {
             return Err(
                 self.refuse("it is on the same device as source.root; is the share mounted?")
             );
