@@ -18,6 +18,21 @@ All notable changes to this project are documented here. This file is generated 
 
 - - -
 
+## [v0.9.0](https://github.com/esteinig/ont-offload/compare/da91a5aa4a49f6596a84c9a014b6d684283e9c0b..v0.9.0) - 2026-11-19
+#### Features
+- (**init**) guided set-up with presets, share probe and next steps (#11) - ([6b9f524](https://github.com/esteinig/ont-offload/commit/6b9f52438ca3c7821be7dbf3c19ba04a0bfb324b)) - [@esteinig](https://github.com/esteinig)
+- (**init**) guided set-up with presets, share probe and next steps - ([da91a5a](https://github.com/esteinig/ont-offload/commit/da91a5aa4a49f6596a84c9a014b6d684283e9c0b)) - esteinig
+- (**logging**) keep every event, log and journal time for lookback - ([117981c](https://github.com/esteinig/ont-offload/commit/117981c2aa0908c7325b3dd6f12fade921cc3f66)) - esteinig
+- (**report**) verification report against simulator or MinKNOW runs - ([abcbd3c](https://github.com/esteinig/ont-offload/commit/abcbd3cf33c672c97f695f71aae4afd656ad6e39)) - esteinig
+- (**report**) status report PDF with an embedded typst template - ([cb3d85e](https://github.com/esteinig/ont-offload/commit/cb3d85ecf7701bdef35c92b3388a7eeb59e8c597)) - esteinig
+- (**report**) status record of a period from the event archive and log - ([6e97232](https://github.com/esteinig/ont-offload/commit/6e97232fb9a2d6c4f2224c6b256b29ffe4759a2c)) - esteinig
+- (**runsim**) resume a stopped simulation with run --resume (#13) - ([7dbe188](https://github.com/esteinig/ont-offload/commit/7dbe1881584e53fa172e3f19a326c29ab761e230)) - [@esteinig](https://github.com/esteinig)
+- (**runsim**) resume a stopped simulation with run --resume - ([8ba9e0d](https://github.com/esteinig/ont-offload/commit/8ba9e0dda2cb1a8ab72017ff540534bab704f8f7)) - esteinig
+#### Documentation
+- (**report**) reports page, configuration, installation and plan - ([47f8629](https://github.com/esteinig/ont-offload/commit/47f862952684f36b02ed48e71adf827ec3cc1497)) - esteinig
+
+- - -
+
 ## [v0.8.0](https://github.com/esteinig/ont-offload/compare/de19f9cfd886473115d8cb26fa86d1f70eb88ea8..v0.8.0) - 2026-11-19
 #### Features
 - (**source**) watch several sources and user datasets marked READY - ([de19f9c](https://github.com/esteinig/ont-offload/commit/de19f9cfd886473115d8cb26fa86d1f70eb88ea8)) - esteinig
