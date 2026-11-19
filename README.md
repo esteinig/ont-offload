@@ -26,6 +26,7 @@ The workspace also contains `ont-runsim`, a test tool that writes simulated MinK
 ```sh
 cargo install --locked --features tui --git https://github.com/esteinig/ont-offload ont-offload
 ont-offload --help
+sudo ont-offload init --preset production --share /mnt/nas/ont   # writes the config, prepares the share, prints next steps
 ont-offload check-config --config /etc/ont-offload/config.toml
 ont-offload watch --config /etc/ont-offload/config.toml        # or: systemctl enable --now ont-offload
 ont-offload run --config /etc/ont-offload/config.toml /data/<experiment>/<sample>/<run>

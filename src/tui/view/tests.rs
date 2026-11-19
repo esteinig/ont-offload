@@ -307,3 +307,197 @@ fn the_banner_shows_until_acknowledged() {
         "still in the alerts panel: {s}"
     );
 }
+
+/// Verifies: SRS-TUI-010
+#[test]
+fn long_values_are_cut_in_the_middle_or_at_the_end() {
+    assert_eq!(middle("short", 10), "short");
+    let path = "exp1/sample_with_a_very_long_name/20261114_1200_X1_PAW00001_abcdef12";
+    let cut = middle(path, 30);
+    assert_eq!(cut.chars().count(), 30, "{cut}");
+    assert!(cut.starts_with("exp1/s") && cut.contains("..."), "{cut}");
+    assert!(
+        cut.ends_with("PAW00001_abcdef12"),
+        "the end tells runs apart: {cut}"
+    );
+    assert_eq!(middle(path, 3), "exp");
+    assert_eq!(clip("a long message", 6), "a lon…");
+    assert_eq!(clip("fits", 4), "fits");
+    assert_eq!(clip("x", 0), "");
+}
+
+const LONG_RUN: &str = "minion-room-2/experiment_with_a_very_long_descriptive_name/sample_barcodes_01_to_24/20261114_1200_X1_PAW00001_abcdef12";
+
+/// A model whose first run has a very long path, among runs with large
+/// file counts, and `n` events, one of them long and about the long run.
+fn long_model(n: u64) -> (tempfile::TempDir, Model) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut snap = normal(&at(0));
+    snap.runs[0].name = LONG_RUN.into();
+    snap.runs[0].run_id = format!("id-{LONG_RUN}");
+    snap.runs[0].source = format!("/data/{LONG_RUN}");
+    snap.runs[0].destination = format!("/mnt/nas/ont/{LONG_RUN}");
+    snap.runs[1].files = 123_456;
+    snap.runs[1].committed_files = 123_456;
+    write_state(dir.path(), &snap);
+    let mut events: Vec<_> = (1..=n)
+        .map(|i| {
+            let secs = i64::try_from(n - i).unwrap();
+            event(
+                i,
+                &at(-secs),
+                Kind::FileCommitted,
+                "info",
+                &format!("committed pod5/batch_{i:04}.pod5"),
+            )
+        })
+        .collect();
+    let long = &mut events[0];
+    long.run = Some(LONG_RUN.into());
+    long.message = format!(
+        "committed {}",
+        "pod5/a_file_name_that_goes_on_and_on_".repeat(6)
+    );
+    append_events(dir.path(), &events);
+    let mut m = Model::new(dir.path(), None);
+    m.refresh(&RealFs, t0() + Duration::from_secs(1));
+    (dir, m)
+}
+
+fn row_of(s: &str, needle: &str) -> String {
+    s.lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no {needle}: {s}"))
+        .to_owned()
+}
+
+/// Verifies: SRS-TUI-006, SRS-TUI-010
+#[test]
+fn run_paths_are_cut_in_the_middle_and_columns_line_up() {
+    let (_d, m) = long_model(3);
+    let s = text(&draw(&m, &ui(TuiTheme::Plain)));
+    let long = row_of(&s, "PAW00001_abcdef12");
+    let short = row_of(&s, "exp2/s2/20261113_PAW00002");
+    assert!(long.contains("minion-room-2/"), "the start is kept: {long}");
+    assert!(long.contains("..."), "{long}");
+    assert!(!long.contains(LONG_RUN), "{long}");
+    assert!(long.contains("eta 15m 0s"), "notes still fit: {long}");
+    let at_char = |line: &str, pat: &str| line.find(pat).map(|b| line[..b].chars().count());
+    // Phase, bar, the slash of the counts and the bytes start in the same columns.
+    assert_eq!(at_char(&long, "live"), at_char(&short, "complete"), "{s}");
+    assert_eq!(at_char(&long, "███"), at_char(&short, "███"), "{s}");
+    assert_eq!(at_char(&long, "/812"), at_char(&short, "/123456"), "{s}");
+    assert_eq!(at_char(&long, "420 GB"), at_char(&short, "420 GB"), "{s}");
+}
+
+/// Verifies: SRS-TUI-010
+#[test]
+fn enter_shows_the_selected_run_in_full() {
+    let (_d, m) = long_model(3);
+    let mut u = ui(TuiTheme::Plain);
+    u.move_by(1);
+    u.move_by(5);
+    u.clamp(&m);
+    assert_eq!(u.scroll[Pane::Runs.index()], 1, "stops at the last run");
+    u.move_by(-1);
+    let s = text(&draw(&m, &u));
+    assert!(row_of(&s, "PAW00001_abcdef12").contains('▸'), "{s}");
+    u.open_detail(&m);
+    assert_eq!(u.detail, Some(Detail::Run(format!("id-{LONG_RUN}"))));
+    let s = text(&draw(&m, &u));
+    golden("detail-run-plain", &s);
+    assert!(s.contains(" Run (Esc to close"), "{s}");
+    assert!(s.contains("790 of 812 committed"), "{s}");
+    // Paths are broken across lines under their label, never shortened.
+    assert_eq!(
+        popup_value(&s, "destination"),
+        format!("/mnt/nas/ont/{LONG_RUN}")
+    );
+    assert_eq!(popup_value(&s, "source"), format!("/data/{LONG_RUN}"));
+}
+
+/// The value after `label` in a detail popup, joined from its lines.
+fn popup_value(screen: &str, label: &str) -> String {
+    let rows: Vec<&str> = screen.lines().collect();
+    let (y, row) = rows
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.contains(&format!("│{label:<16}")))
+        .unwrap_or_else(|| panic!("no {label}: {screen}"));
+    let x = row.find(&format!("│{label:<16}")).unwrap() + "│".len();
+    let start = row[..x].chars().count();
+    let cell = |r: &str| -> String {
+        r.chars()
+            .skip(start + 16)
+            .take_while(|c| *c != '│')
+            .collect::<String>()
+            .trim_end()
+            .to_owned()
+    };
+    let mut value = cell(row);
+    for r in &rows[y + 1..] {
+        let indent: String = r.chars().skip(start).take(16).collect();
+        if !indent.trim().is_empty() || cell(r).is_empty() {
+            break;
+        }
+        value.push_str(&cell(r));
+    }
+    value
+}
+
+/// Verifies: SRS-TUI-010
+#[test]
+fn events_are_selected_from_the_newest_and_shown_in_full() {
+    let (dir, mut m) = long_model(40);
+    let mut u = ui(TuiTheme::Plain);
+    u.focus = Pane::Events;
+    let s = text(&draw(&m, &u));
+    assert!(
+        row_of(&s, "batch_0040").contains('▸'),
+        "newest selected: {s}"
+    );
+    assert!(
+        !s.contains("a_file_name"),
+        "the oldest is not on screen: {s}"
+    );
+    // Up goes to older events, scrolling once past the top of the pane.
+    u.move_by(-45);
+    u.clamp(&m);
+    let s = text(&draw(&m, &u));
+    let long = row_of(&s, "a_file_name");
+    assert!(long.contains('▸'), "{s}");
+    assert!(long.contains('…'), "cut at the end: {long}");
+    assert!(long.contains("..."), "run path cut in the middle: {long}");
+    assert!(!s.contains("batch_0040"), "scrolled up: {s}");
+    u.open_detail(&m);
+    assert!(
+        matches!(&u.detail, Some(Detail::Event { seq: 1, .. })),
+        "{:?}",
+        u.detail
+    );
+    let s = text(&draw(&m, &u));
+    assert!(s.contains(" Event (Esc to close"), "{s}");
+    assert_eq!(popup_value(&s, "run"), LONG_RUN, "{s}");
+    assert_eq!(popup_value(&s, "kind"), "file_committed", "{s}");
+    assert_eq!(popup_value(&s, "sequence"), "1", "{s}");
+
+    // New events do not move the selection.
+    u.detail = None;
+    u.scroll[Pane::Events.index()] = 2;
+    let anchor = u.anchor(&m);
+    let before = selected_event(&m, &u).map(|e| e.seq);
+    append_events(
+        dir.path(),
+        &[event(
+            41,
+            &at(1),
+            Kind::FileCommitted,
+            "info",
+            "committed later",
+        )],
+    );
+    m.refresh(&RealFs, t0() + Duration::from_secs(2));
+    u.follow(&m, anchor);
+    assert_eq!(selected_event(&m, &u).map(|e| e.seq), before);
+    assert_eq!(u.scroll[Pane::Events.index()], 3);
+}

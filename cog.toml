@@ -47,3 +47,8 @@ remote = "github.com"
 repository = "ont-offload"
 owner = "esteinig"
 authors = [{ signature = "Eike Steinig", username = "esteinig" }]
+
+# Manual releases without CI gates (until v1.0.0): cog bump --hook-profile manual
+[bump_profiles.manual]
+pre_bump_hooks = ["cargo xtask set-version {{version}}"]
+post_bump_hooks = []

@@ -4,7 +4,7 @@ title = "Subcommands"
 status = "draft"
 release = "v0.1"
 text = """
-Provides the subcommands watch, run, verify, status, check-config, bench and cleanup; a command not yet implemented exits with code 1 and names its planned release.
+Provides the subcommands watch, run, verify, status, check-config, bench, cleanup, tui and init; a command not yet implemented exits with code 1 and names its planned release.
 """
 verification = "Unit: parse every subcommand; integration: unimplemented command message"
 

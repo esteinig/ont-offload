@@ -1,0 +1,13 @@
+id = "SRS-TUI-010"
+type = "requirement"
+title = "Aligned runs and events with a detail popup"
+status = "draft"
+release = "v0.9"
+text = """
+The runs and events panes list one entry per line in fixed columns (severity, run path, phase, progress bar, file counts and bytes for runs; severity, time, run path and message for events), so that entries line up whatever their length. A run path too long for its column is shortened in the middle (start, "...", end), keeping the end that tells runs apart; a message too long for the pane is cut at its end with "…". Failed files and errors are listed first on a run's line. Up and down select an entry, Enter opens a popup with everything the snapshot or event says about it, with paths and messages in full, and Esc closes it; new events do not move a selection made above the newest event.
+"""
+verification = "Unit: middle and end shortening; render tests: a long run path shortened in the middle with columns aligned, selection and popup of a run and of an event with the full path, selection kept when events arrive"
+
+[links]
+allocated_to = ["SWI-TUI"]
+mitigates = ["HAZ-015", "HAZ-016"]

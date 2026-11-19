@@ -7,6 +7,7 @@
 | `ont-offload verify <run> [--source]` | Re-hash a destination run against its manifest; writes `VERIFIED.json` | v0.2 |
 | `ont-offload verify <run> --against <folder>` | Check another copy of the run (the legacy service's, in a [parallel run](deployment.md#6-parallel-run-beside-the-legacy-service)) against the run's manifest; writes nothing | v0.7 |
 | `ont-offload status [--json]` | Print the live state that `watch` keeps in `state_dir/state.json`; see [Live state and status](watch.md#live-state-and-status) | v0.4 |
+| `ont-offload init [--preset local\|test\|production] [--share DIR] [...] [--print]` | Write a configuration from a preset, create its folders, prepare and probe the share, check the result and print the next steps; see [Setting up with init](init.md) | v0.9 |
 | `ont-offload check-config` | Validate config and paths, print the effective settings, the detected runs with their destination folders, the destination guard result and (v0.7) a write probe on the share showing the owner and mode the copies will get | v0.1 |
 | `ont-offload bench [--size 2GB] [--max-streams 16] [--no-chunks]` | Measure the share; suggest `workers`, `rate_limit` and `chunk_size`, recorded in `state_dir/bench.json`; see [Tuning with bench](watch.md#tuning-with-bench) | v0.4 |
 | `ont-offload cleanup [--dry-run] [<run>]` | Gated deletion of offloaded source runs; see [Deleting offloaded runs](cleanup.md) | v0.5 |

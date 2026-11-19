@@ -1,0 +1,13 @@
+id = "SRS-CFG-005"
+type = "requirement"
+title = "Guided set-up (init)"
+status = "draft"
+release = "v0.9"
+text = """
+init writes a commented configuration from a preset (local: tmpfs share and work folder; test: own folder on a mounted share, short timings, cleanup dry-run; production: /etc, /var/lib and /var/log, cleanup off) with the sources runs (minknow), transfer (ready, never deleted) and simulation (any-depth), every value overridable by a flag or --set KEY=VALUE, and parses it strictly before changing anything. Before writing to the share it requires the mount under the share folder to have an allowed filesystem type and refuses a sentinel naming another target; it never replaces a sentinel. It then creates the work, state, log and source folders, the share folder and sentinel, runs the write probe, writes the file (an existing one only with --force, keeping a .bak), validates it with the destination guard as check-config does, and prints numbered next steps (configuration path, manual review, check-config, bench, starting the daemon or service, a simulated run, a transfer, cleanup dry run). --print changes nothing; --no-probe writes nothing to the share.
+"""
+verification = "Unit: presets, flag and --set overrides refused by the strict parser, share on a refused filesystem writes nothing, foreign sentinel kept, NFS share from a mount table, --print and --no-probe, next steps per plan; integration (binary): init then check-config passes on tmpfs"
+
+[links]
+allocated_to = ["SWI-CONFIG", "SWI-CLI"]
+mitigates = ["HAZ-001", "HAZ-008"]

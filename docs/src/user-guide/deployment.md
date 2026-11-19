@@ -72,7 +72,9 @@ sudo install -m 0644 packaging/ont-offload.service /etc/systemd/system/
 sudo install -m 0644 packaging/tui.env /etc/ont-offload/tui.env
 ```
 
-Set `logging.file = "/var/log/ont-offload/ont-offload.log"`. The daemon reopens the file by name within a second after logrotate renames it, so no signal or `copytruncate` is needed; logrotate rotates weekly or at 100 MB and never removes or compresses an old file (`rotate -1`), so the logs stay available for a clinical lookback; `state.free_alert` warns before the disk fills.
+Alternatively, `sudo ont-offload init --preset production --share <dest_root> --data <source root>` writes `/etc/ont-offload/config.toml` with the `runs`, `transfer` and `simulation` sources, creates `/var/lib/ont-offload`, `/var/log/ont-offload` and the source folders, places the sentinel after checking the share's filesystem type, runs the write probe and prints what is left to do (see [Setting up with init](init.md)). It does not install the unit or logrotate files.
+
+Set `logging.file = "/var/log/ont-offload/ont-offload.log"`. The daemon reopens the file by name within a second after logrotate renames it, so no signal or `copytruncate` is needed; logrotate keeps 12 compressed files, rotated weekly or at 100 MB.
 
 ## 5. Checks before the first start
 

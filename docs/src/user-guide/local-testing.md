@@ -31,6 +31,8 @@ scripts/local-test.sh setup
 eval "$(scripts/local-test.sh env)"     # sets S, W, CFG and ONT_OFFLOAD_CONFIG
 ```
 
+`ont-offload init` (the `local` preset) makes a similar bench in `~/ont-local` with separate `runs`, `transfer` and `simulation` sources; see [Setting up with init](init.md). The steps below use the script's single source.
+
 `setup` creates:
 
 | Path | Stands in for |

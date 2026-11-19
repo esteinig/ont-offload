@@ -44,6 +44,9 @@ pub fn execute(cli: &Cli) -> Result<()> {
     let out = &mut std::io::stdout();
     match &cli.command {
         Command::CheckConfig => check_config(&cli.global.config, &RealFs, None, out),
+        Command::Init(args) => {
+            config::init::run(args, &RealFs, &config::init::Host::current(), out)
+        }
         Command::Run { path, completed } => {
             run_one(&cli.global.config, &RealFs, None, path, *completed, out)
         }
