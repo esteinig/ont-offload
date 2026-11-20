@@ -35,15 +35,16 @@ Development was conducted under IEC 62304 (software safety class B) guidelines w
 - Files hashed (SHA-256) during transfer and committed by atomic rename
 - A `sha256sum -c` compatible manifest, `run.json` and `COMPLETE` markers for each run
 - Independent storage-side verification (`ont-offload verify`) with `VERIFIED.json` receipts
-- Transfers paused during network outages of any duration, or low share capacity, andresumed automatically
-- Live state published as `state.json` and `events.jsonl`, with optional `notify_command` (Slack, email, ...)
-- Complete audit trail for event and ste logs, journal records retained for compliance 
-- Typst reports (PDF/A-2b) for verification of simulations and playback runs
-- IVD software hazard register with risk controls traceable to code and tests (IEC 62304, class B)
+- Resumable transfer during network outages or low share capacity
+- Live state in `state.json` and `events.jsonl`, with optional `notify_command` 
+- Complete audit trail for event and state logs, journal records for compliance 
+- Typst reports (PDF/A-2b) for operational verification of simulations and playback runs
 
 ## Quickstart
 
-The steps below set up a local test bench, in which a tmpfs folder (`/dev/shm/ont-share`) stands in for the network share, and transfer a simulated 2-hour run in about 2 minutes. Linux (or WSL2) required - since the destination guard reads `/proc/self/mountinfo`.
+The steps below set up a local test bench, in which a tmpfs folder (`/dev/shm/ont-share`) stands in for the network share, and transfer a simulated 2-hour run in about 2 minutes. 
+
+Linux (or WSL2) required since the destination guard reads `/proc/self/mountinfo`.
 
 ### 1. Installation
 
