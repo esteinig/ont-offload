@@ -99,9 +99,9 @@ On completion, the SHA manifest and `COMPLETE` marker are written and the copy c
 
 ```sh
 RUN=$(ls -d /dev/shm/ont-share/simulation/test-01/*/*/*/ | tail -1)
-ont-runsim check --out ~/ont-local/data/simulation/test-01 --dest "$RUN"   # files match
-(cd "$RUN" && sha256sum --quiet -c manifest.sha256 && echo "sha256sum OK")
-ont-offload verify "$RUN" --source                                         # VERIFIED.json
+ont-runsim check --out $SIM --dest $RUN   # files match
+(cd $RUN && sha256sum --quiet -c manifest.sha256 && echo "sha256sum OK")
+ont-offload verify $RUN --source                                         # VERIFIED.json
 ```
 
 ### 4. Monitoring
