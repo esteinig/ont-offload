@@ -21,18 +21,18 @@ Development was conducted under IEC 62304 (software safety class B) guidelines w
 
 ## Overview
 
-- Multiple sources watched by one daemon (e.g. production runs, simulation, manual transfer folders with `READY` markers)
-- Real-time transfer of live and completed runs to mounted drives (NFS, SMB), with the MinKNOW directory structure preserved
-- Total bandwidth capped by `rate_limit` shared across parallel workers, with share benchmarking (`ont-offload bench`)
+- Multiple sources watched by one daemon (e.g. production runs and manual transfer directories)
+- Real-time transfer of live and completed runs to mounted drives (NFS, SMB)
+- Total bandwidth capped by `rate_limit` across parallel workers with benchmarking (`ont-offload bench`)
 - Guided setup with `ont-offload init` including site presets (`local`, `test`, `production`, `promethion`)
 - Live monitoring with `ont-offload status` and the terminal dashboard (`ont-offload tui`)
 
 ## Controls
 
-- Simulated MinKNOW runs for testing and validation with `ont-runsim` (fault injection, outages, resumable long runs)
+- Simulated MinKNOW runs for testing and validation with `ont-runsim`
 - Source deletion optional and disabled by default, with configurable pre-deletion checks and dry-run mode
 - Writes are refused unless the destination is confirmed as mounted (re-checked before every transfer)
-- Files hashed (SHA-256) during transfer and committed by atomic rename
+- Files hashed (SHA-256) during transfer and committed by atomic rename on storage side
 - A `sha256sum -c` compatible manifest, `run.json` and `COMPLETE` markers for each run
 - Independent storage-side verification (`ont-offload verify`) with `VERIFIED.json` receipts
 - Resumable transfer during network outages or low share capacity
