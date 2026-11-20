@@ -115,7 +115,7 @@ ont-offload tui --theme matrix      # terminal dashboard
 
 The dashboard shows destination and guard state, throughput, per-run progress, open alerts and the event stream, with configurable themes `plain`, `matrix`, `phosphor` and `synthwave`. 
 
-> [!INFO]
+>[!INFO]
 > Settings, keys and the `ont-offload-tui` launcher described in the [dashboard guide](docs/src/user-guide/tui.md). Outage, crash-recovery and cleanup drills for the same test bench are given in the [local testing guide](docs/src/user-guide/local-testing.md).
 
 ### 5. Deployment on a sequencer
