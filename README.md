@@ -88,16 +88,14 @@ The daemon is started in the first terminal:
 ont-offload watch          # resumes from journal 
 ```
 
-A simulated run is written from a second terminal - the `quick-2h` preset produces two hours of a run. 47 files (pod5, FASTQ and BAM batches, sample sheet, final summary) and 67 MB over at 60x speed over two minutes:
+A simulated run is written from a second terminal - the `quick-2h` preset produces two hours of a run. 47 files and 67 MB at 60x speed over two minutes (POD5, BAM, FASTQ, sequencing summaries):
 
 ```sh
 SIM="~/ont-local/data/simulation/test-01"
 ont-runsim run --preset quick-2h --out $SIM --keep-free 1GB
 ```
 
-Files are transferred as they settle for a short period after transfer ceases. 
-
-On completion, the SHA manifest and `COMPLETE` are written and the copy can be checked independently of `ont-offload` with `sha256sum`:
+On completion, the SHA manifest and `COMPLETE` marker are written and the copy can be checked independently of `ont-offload` with `sha256sum`:
 
 ```sh
 RUN=$(ls -d /dev/shm/ont-share/simulation/test-01/*/*/*/ | tail -1)
