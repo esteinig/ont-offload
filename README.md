@@ -45,7 +45,7 @@ Development was conducted under IEC 62304 (software safety class B) guidelines w
 The steps below set up a local test bench, in which a `tmpfs` folder (`/dev/shm/ont-share`) stands in for the network share, and we transfer a simulated 2-hour run in about 2 minutes. 
 
 > [!IMPORTANT]
-> Linux (or WSL2) required since the destination guard reads `/proc/self/mountinfo`.
+> Linux (or WSL2) required since the destination guard reads `/proc/self/mountinfo`
 
 
 ### 1. Installation
@@ -78,7 +78,7 @@ ont-offload check-config                           # config warnings
 A templated configuration is written from a preset, then the state, log and source folders (`runs`, `transfer`, `simulation`) are created, a sentinel file is placed on the share, a write probe is conducted and its esult validated, and the remaining config steps output to console. 
 
 > [!TIP] 
-> Warnings about nested source roots and the dry-run cleanup configuration are expected with the `local` preset.
+> Warnings about nested source roots and the dry-run cleanup configuration are expected with `local`
 
 ### 3. Simulated transfer
 
