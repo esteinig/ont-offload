@@ -1,4 +1,4 @@
-forks<h1 align="center">ont-offload</h1>
+<h1 align="center">ont-offload</h1>
 
 <p align="center">
 Auditable and controlled transfer of ONT sequencing data from local to mounted network storage
