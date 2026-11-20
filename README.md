@@ -115,7 +115,7 @@ ont-offload tui --theme matrix      # terminal dashboard
 
 The dashboard shows destination and guard state, throughput, per-run progress, open alerts and the event stream, with configurable themes `plain`, `matrix`, `phosphor` and `synthwave`. 
 
->[!INFO]
+> [!INFO]
 > Settings, keys and the `ont-offload-tui` launcher described in the [dashboard guide](docs/src/user-guide/tui.md). Outage, crash-recovery and cleanup drills for the same test bench are given in the [local testing guide](docs/src/user-guide/local-testing.md).
 
 ### 5. Deployment on a sequencer
@@ -132,7 +132,7 @@ sudo systemctl enable --now ont-offload # after service files installed
 
 
 > [!INFO]
->  Preset options and source flags are documented in [Setting up with init](docs/src/user-guide/init.md). Operation as a dedicated service user, log rotation and parallel operations are described in the [deployment guide](docs/src/user-guide/deployment.md), with limitations and controls in [the user guide](docs/src/user-guide/limitations.md). 
+> Preset options and source flags are documented in [Setting up with init](docs/src/user-guide/init.md). Operation as a dedicated service user, log rotation and parallel operations are described in the [deployment guide](docs/src/user-guide/deployment.md), with limitations and controls in [the user guide](docs/src/user-guide/limitations.md). 
 
 An annotated example configuration is provided in [`packaging/ont-offload.example.toml`](packaging/ont-offload.example.toml) and a reference systemd unit in [`packaging/ont-offload.service`](packaging/ont-offload.service).
 
