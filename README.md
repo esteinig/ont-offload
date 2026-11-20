@@ -1,7 +1,7 @@
-<h1 align="center">ont-offload</h1>
+forks<h1 align="center">ont-offload</h1>
 
 <p align="center">
-Auditable transfer of Oxford Nanopore sequencing runs from sequencer-local storage to mounted network storage, developed for clinical laboratory infrastructure.
+Auditable and controlled data transfer of Oxford Nanopore technologies (ONT) sequencing data from local to mounted network storage.
 </p>
 
 <p align="center">
