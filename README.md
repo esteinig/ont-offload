@@ -11,7 +11,7 @@ Auditable and controlled transfer of ONT sequencing data from local to mounted n
 </p>
 
 <p align="center">
-<img src="docs/src/images/tui-themes-grid.png" alt="ont-offload terminal dashboard themes during transfer of a simulated run" width="50%">
+<img src="docs/src/images/tui-themes-grid.png" alt="ont-offload terminal dashboard themes during transfer of a simulated run" width="75%">
 </p>
 
 
