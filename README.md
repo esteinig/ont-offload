@@ -150,6 +150,20 @@ An annotated example configuration is provided in [`packaging/ont-offload.exampl
 | `report` | Clinical operations reports (JSON record and PDF/A-2b) - see [Reports](docs/src/user-guide/reports.md) |
 | `status`, `tui` | Read-only views of daemon state and as a terminal dashboard |
 
+## Reports
+
+### `verify`
+
+Report on requirements testing and transfer verification for simulated or playback runs - used in operational verification e.g. as a change-control systems test.
+
+
+<table>
+  <tr>
+    <td><img src="docs/src/images/ops-report-p1.png" alt="ops-report page 1" width="500"></td>
+    <td><img src="docs/src/images/ops-report-p2.png" alt="ops-report page 2" width="520"></td>
+  </tr>
+</table>
+
 ## Exit codes
 
 | Code | Meaning |
