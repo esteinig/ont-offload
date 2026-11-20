@@ -15,7 +15,9 @@ Auditable and controlled transfer of ONT sequencing data from local to mounted n
 </p>
 
 
-`ont-offload` is a toolkit for transfer of live and completed runs to mounted storage with end-to-end verification, guarded writes, outage tolerance, machine-readable audit trail, and operational report outputs (`.pdf`). Development was conducted under IEC 62304 (software safety class B) guidelines with requirements, hazards, and tests traceable for compliance.
+`ont-offload` is a toolkit for transfer of live and completed runs to mounted storage with end-to-end verification, guarded writes, outage tolerance, machine-readable audit trail, and operational reports. 
+
+Development was conducted under IEC 62304 (software safety class B) guidelines with requirements, hazards, and tests traceable for compliance.
 
 ## Overview
 
