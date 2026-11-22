@@ -575,11 +575,31 @@ pub fn parse_manifest(text: &str) -> Result<BTreeMap<String, String>> {
 /// # Errors
 /// I/O errors.
 pub fn write_atomic(fs: &dyn Fs, dir: &Path, name: &str, data: &[u8]) -> Result<()> {
+    write_atomic_mode(fs, dir, name, data, None)
+}
+
+/// [`write_atomic`], giving the file `mode` (when given) before the rename.
+///
+/// # Errors
+/// I/O errors.
+pub fn write_atomic_mode(
+    fs: &dyn Fs,
+    dir: &Path,
+    name: &str,
+    data: &[u8],
+    mode: Option<&crate::config::mode::Mode>,
+) -> Result<()> {
     let tmp = dir.join(crate::copy::temp_name(name));
     {
         let mut f = fs.create_new(&tmp)?;
         f.write_all(data)?;
         f.sync_data()?;
+    }
+    if let Some(m) = mode {
+        if let Err(e) = m.set(fs, &tmp, false) {
+            let _ = fs.remove_file(&tmp);
+            return Err(e.into());
+        }
     }
     fs.rename(&tmp, &dir.join(name))?;
     fs.sync_dir(dir)?;
@@ -607,7 +627,10 @@ pub fn host_name(fs: &dyn Fs) -> String {
 /// made for the same source. A claim for another source, by any host or
 /// state folder, refuses the run.
 ///
-/// Implements: SRS-SEL-008
+/// The folders created for it get `modes.dir` and the claim `modes.record`
+/// (when set).
+///
+/// Implements: SRS-SEL-008, SRS-CPY-003
 ///
 /// # Errors
 /// [`crate::copy::CopyFail::Conflict`] for another run's claim,
@@ -619,10 +642,11 @@ pub fn claim_on_share(
     source: &Path,
     run_id: &str,
     target_id: &str,
+    modes: &crate::config::mode::OutputModes,
 ) -> std::result::Result<(), crate::copy::CopyFail> {
     use crate::copy::CopyFail;
     guard.check(fs).map_err(CopyFail::Guard)?;
-    fs.create_dir_all(dest)?;
+    crate::copy::create_dirs(fs, dest, modes.dir.as_ref())?;
     let path = dest.join(SHARE_CLAIM);
     let src = source.to_string_lossy().into_owned();
     let body = serde_json::json!({
@@ -639,6 +663,9 @@ pub fn claim_on_share(
             f.write_all((body.to_string() + "\n").as_bytes())?;
             f.sync_data()?;
             drop(f);
+            if let Some(m) = &modes.record {
+                m.set(fs, &path, false)?;
+            }
             fs.sync_dir(dest)?;
             Ok(())
         }

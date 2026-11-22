@@ -15,6 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
+use crate::config::mode::Mode;
 use crate::error::{Error, Result};
 use crate::fsio::Fs;
 use crate::logging::escape_control;
@@ -308,7 +309,7 @@ impl Probe {
 ///
 /// # Errors
 /// [`Error::Guard`] when the file cannot be written, inspected or removed.
-pub fn probe_write(dest: &Path, file_mode: u32, fs: &dyn Fs) -> Result<Probe> {
+pub fn probe_write(dest: &Path, file_mode: &Mode, fs: &dyn Fs) -> Result<Probe> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());
@@ -327,20 +328,27 @@ pub fn probe_write(dest: &Path, file_mode: u32, fs: &dyn Fs) -> Result<Probe> {
     drop(f);
     let result = written
         .map_err(|e| fail("write", e))
-        .and_then(|()| {
-            fs.set_mode(&path, file_mode)
+        .and_then(|()| fs.metadata(&path).map_err(|e| fail("inspect", e)))
+        .and_then(|st| {
+            let wanted = file_mode.apply(st.mode, false);
+            fs.set_mode(&path, wanted)
                 .map_err(|e| fail("set the mode of", e))
+                .map(|()| wanted)
         })
-        .and_then(|()| fs.metadata(&path).map_err(|e| fail("inspect", e)));
+        .and_then(|wanted| {
+            fs.metadata(&path)
+                .map(|st| (st, wanted))
+                .map_err(|e| fail("inspect", e))
+        });
     let removed = fs.remove_file(&path).map_err(|e| fail("remove", e));
-    let st = result?;
+    let (st, wanted_mode) = result?;
     removed?;
     Ok(Probe {
         process: process_ids(),
         uid: st.uid,
         gid: st.gid,
         mode: st.mode & 0o7777,
-        wanted_mode: file_mode,
+        wanted_mode,
     })
 }
 
@@ -354,7 +362,7 @@ mod tests {
     #[test]
     fn write_probe_reports_owner_and_mode_and_leaves_nothing() {
         let dir = tempfile::tempdir().unwrap();
-        let p = probe_write(dir.path(), 0o640, &RealFs).unwrap();
+        let p = probe_write(dir.path(), &Mode::octal(0o640), &RealFs).unwrap();
         assert_eq!(
             std::fs::read_dir(dir.path()).unwrap().count(),
             0,
@@ -374,7 +382,7 @@ mod tests {
             "",
             Fault::Errno(crate::fsio::errno::EACCES),
         ));
-        let e = probe_write(dir.path(), 0o640, &fs).unwrap_err();
+        let e = probe_write(dir.path(), &Mode::octal(0o640), &fs).unwrap_err();
         assert!(
             matches!(e, Error::Guard(ref m) if m.contains("cannot create")),
             "{e}"
@@ -386,7 +394,7 @@ mod tests {
             "",
             Fault::Errno(crate::fsio::errno::ENOSPC),
         ));
-        assert!(probe_write(dir.path(), 0o640, &fs).is_err());
+        assert!(probe_write(dir.path(), &Mode::octal(0o640), &fs).is_err());
         assert_eq!(
             std::fs::read_dir(dir.path()).unwrap().count(),
             0,

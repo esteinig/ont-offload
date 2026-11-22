@@ -455,6 +455,35 @@ pub fn classify(err: &io::Error) -> ErrorClass {
     }
 }
 
+/// Test helper: sets the process umask until dropped, one holder at a
+/// time, so that tests asserting the modes new files and folders get do
+/// not race each other (and the umask of the shell running the tests,
+/// such as 0002, does not matter) under `cargo test` as under nextest.
+#[cfg(test)]
+pub(crate) struct UmaskGuard {
+    old: rustix::fs::Mode,
+    _lock: std::sync::MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl UmaskGuard {
+    pub(crate) fn set(mask: u32) -> Self {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let lock = LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let old = rustix::process::umask(rustix::fs::Mode::from_raw_mode(mask));
+        Self { old, _lock: lock }
+    }
+}
+
+#[cfg(test)]
+impl Drop for UmaskGuard {
+    fn drop(&mut self) {
+        rustix::process::umask(self.old);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

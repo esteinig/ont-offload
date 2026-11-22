@@ -92,7 +92,7 @@ fn minimal_config_is_valid_with_defaults() {
     assert_eq!(c.bandwidth.rate_limit, Rate::Unlimited);
     assert_eq!(c.transfer.chunk_size, 8 << 20);
     assert_eq!(c.transfer.verify, VerifyMode::Inflight);
-    assert_eq!(c.transfer.file_mode, 0o640);
+    assert_eq!(c.transfer.modes.file.apply(0, false), 0o640);
     assert_eq!(c.cleanup.delete, DeleteMode::Off);
     assert_eq!(c.sources[0].run_markers, vec!["sample_sheet_*.csv"]);
     assert!(loaded.warnings.iter().any(|w| w.contains("unlimited")));
@@ -551,4 +551,99 @@ fn a_run_that_would_land_in_another_sources_folder_is_refused() {
         c.dest_of(1, Path::new("alice/set1")).unwrap(),
         Path::new("transfer/alice/set1")
     );
+}
+
+/// Verifies: SRS-CPY-003
+#[test]
+fn output_modes_default_as_before_and_can_be_set_in_octal_or_chmod_symbols() {
+    let env = Env::new();
+    let c = env.check(&env.toml("")).unwrap().config;
+    assert!(!c.transfer.world_readable);
+    assert_eq!(c.transfer.modes, mode::OutputModes::default());
+    assert_eq!(c.transfer.modes.file.apply(0o777, false), 0o640);
+    assert!(
+        c.summary()
+            .contains("files 0640, folders by umask, run records by umask"),
+        "{}",
+        c.summary()
+    );
+
+    let c = env
+        .check(&env.toml(
+            "[transfer]\nfile_mode = \"u=rw,g=r,o=r\"\ndir_mode = \"2775\"\nrecord_mode = \"ug=rw\"",
+        ))
+        .map(|l| l.config);
+    // setgid is refused: it would apply to every folder ont-offload creates.
+    assert!(c.is_err());
+    let c = env
+        .check(&env.toml(
+            "[transfer]\nfile_mode = \"u=rw,g=r,o=r\"\ndir_mode = \"0775\"\nrecord_mode = \"ug=rw\"",
+        ))
+        .unwrap()
+        .config;
+    let m = &c.transfer.modes;
+    assert_eq!(m.file.apply(0o600, false), 0o644);
+    assert_eq!(m.dir.as_ref().unwrap().apply(0o750, true), 0o775);
+    assert_eq!(m.record.as_ref().unwrap().apply(0o640, false), 0o660);
+    assert!(
+        c.summary()
+            .contains("files 0644, folders 0775, run records umask then ug=rw"),
+        "{}",
+        c.summary()
+    );
+}
+
+/// Verifies: SRS-CPY-003
+#[test]
+fn world_readable_widens_whatever_modes_are_set() {
+    let env = Env::new();
+    let c = env
+        .check(&env.toml("[transfer]\nworld_readable = true"))
+        .unwrap()
+        .config;
+    assert!(c.transfer.world_readable);
+    let m = &c.transfer.modes;
+    assert_eq!(m.file.apply(0, false), 0o644);
+    assert_eq!(m.dir.as_ref().unwrap().apply(0o750, true), 0o755);
+    assert_eq!(m.record.as_ref().unwrap().apply(0o640, false), 0o644);
+    let summary = c.summary();
+    assert!(
+        summary.contains(
+            "files 0644, folders umask then a+rx, run records umask then a+r (world_readable)"
+        ),
+        "{summary}"
+    );
+    // Read bits are only ever added: a wider mode is kept.
+    let c = env
+        .check(
+            &env.toml(
+                "[transfer]\nworld_readable = true\nfile_mode = \"0660\"\ndir_mode = \"0770\"",
+            ),
+        )
+        .unwrap()
+        .config;
+    assert_eq!(c.transfer.modes.file.apply(0, false), 0o664);
+    assert_eq!(c.transfer.modes.dir.as_ref().unwrap().apply(0, true), 0o775);
+}
+
+/// Verifies: SRS-CPY-003, SRS-CFG-003
+#[test]
+fn modes_that_lock_out_the_owner_or_do_not_parse_are_reported() {
+    let env = Env::new();
+    let msg =
+        env.problems(&env.toml(
+            "[transfer]\nfile_mode = \"u-w\"\ndir_mode = \"0644\"\nrecord_mode = \"rw-r--r--\"",
+        ));
+    for key in [
+        "transfer.file_mode",
+        "transfer.dir_mode",
+        "transfer.record_mode",
+    ] {
+        assert!(msg.contains(key), "missing {key} in:\n{msg}");
+    }
+    assert!(
+        msg.contains("must let the owner read, write and enter"),
+        "{msg}"
+    );
+    assert!(msg.contains("chmod symbols"), "{msg}");
 }

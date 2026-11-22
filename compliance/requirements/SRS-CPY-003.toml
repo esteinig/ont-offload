@@ -1,0 +1,13 @@
+id = "SRS-CPY-003"
+type = "requirement"
+title = "Configurable output permissions"
+status = "draft"
+release = "v0.10"
+text = """
+The modes of what ont-offload writes on the destination are set in [transfer]: file_mode for copied files (default "0640"), dir_mode for the folders it creates and record_mode for the run records (manifest.sha256, run.json, COMPLETE, the share claim, DELETED.json), both by default unset, leaving the process umask as before. Each takes an octal mode ("0644") or chmod symbols ("u=rw,g=r,o=", "a+rX"), applied as chmod would to the mode the file or folder was created with; setuid, setgid and sticky bits are refused, a folder keeps a setgid bit it inherits, and a mode that takes read or write (and for folders enter) away from the owner is a configuration problem. transfer.world_readable = true (default false) applies a+r after file_mode and record_mode and a+rx after dir_mode. Folders that already existed, including dest_root, are not changed. check-config shows the resulting modes.
+"""
+verification = "Unit + integration"
+
+[links]
+allocated_to = ["SWI-COPY", "SWI-CONFIG", "SWI-JOURNAL", "SWI-RUN"]
+mitigates = ["HAZ-019"]

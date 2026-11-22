@@ -294,7 +294,7 @@ impl Watcher {
             chunk_size: chunk,
             verify: cfg.transfer.verify,
             on_existing: cfg.transfer.on_existing,
-            file_mode: cfg.transfer.file_mode,
+            modes: cfg.transfer.modes.clone(),
             preserve_mtime: cfg.transfer.preserve_mtime,
             min_free: cfg.transfer.min_free,
         };
@@ -307,7 +307,7 @@ impl Watcher {
             usize::try_from(cfg.bandwidth.workers).unwrap_or(1),
             &fs,
             &guard,
-            copy_opts,
+            &copy_opts,
             &rate,
             &clock,
         )?;

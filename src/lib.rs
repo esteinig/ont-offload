@@ -267,7 +267,7 @@ pub fn check_config(
                 escape_control(&m.source),
                 escape_control(&m.point.to_string_lossy())
             )?;
-            let probe = match guard::probe_write(guard.dest(), cfg.transfer.file_mode, fs) {
+            let probe = match guard::probe_write(guard.dest(), &cfg.transfer.modes.file, fs) {
                 Ok(p) => p,
                 Err(e) => {
                     writeln!(out, "share write probe FAILED: {e}")?;

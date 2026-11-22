@@ -42,7 +42,7 @@ use crate::fsio::{FileKind, Fs};
 use crate::guard::Guard;
 use crate::journal::{
     self, COMPLETE, Committed, DELETED, Journal, MANIFEST, Record, VERIFIED, parse_manifest,
-    sha256_hex, write_atomic,
+    sha256_hex, write_atomic_mode,
 };
 use crate::logging::escape_control;
 use crate::run::safe_join;
@@ -845,7 +845,8 @@ impl Pass<'_> {
             "deletions_log": state_dir.join(DELETIONS).to_string_lossy(),
         });
         let text = serde_json::to_string_pretty(&record).unwrap_or_default() + "\n";
-        write_atomic(self.fs, &plan.dest, DELETED, text.as_bytes())
+        let mode = self.cfg.transfer.modes.record.as_ref();
+        write_atomic_mode(self.fs, &plan.dest, DELETED, text.as_bytes(), mode)
             .map_err(|e| format!("writing {DELETED}: {e}"))?;
         j.append(
             self.fs,

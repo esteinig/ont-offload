@@ -12,6 +12,7 @@
 //! refused before anything is read or written.
 
 pub mod init;
+pub mod mode;
 pub mod units;
 
 use std::fmt::Write as _;
@@ -532,8 +533,14 @@ pub struct RawTransfer {
     pub min_free: String,
     /// Copy modification times.
     pub preserve_mtime: bool,
-    /// Octal permissions of copied files.
+    /// Mode of copied files: octal or chmod symbols.
     pub file_mode: String,
+    /// Mode of the folders created on the destination (`""`: the umask).
+    pub dir_mode: String,
+    /// Mode of the run records on the destination (`""`: the umask).
+    pub record_mode: String,
+    /// Make everything written on the destination readable by everyone.
+    pub world_readable: bool,
     /// How long a completed run is still watched for changes (`"0s"`: not at all).
     pub watch_completed_for: String,
 }
@@ -551,6 +558,9 @@ impl Default for RawTransfer {
             min_free: "500GiB".into(),
             preserve_mtime: true,
             file_mode: "0640".into(),
+            dir_mode: String::new(),
+            record_mode: String::new(),
+            world_readable: false,
             watch_completed_for: "24h".into(),
         }
     }
@@ -777,7 +787,7 @@ pub struct Bandwidth {
 }
 
 /// `[transfer]`, validated.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Transfer {
     /// Chunk size in bytes.
     pub chunk_size: u64,
@@ -797,8 +807,12 @@ pub struct Transfer {
     pub min_free: u64,
     /// Preserve modification times.
     pub preserve_mtime: bool,
-    /// File permissions.
-    pub file_mode: u32,
+    /// Modes of copied files, folders and run records on the destination
+    /// (`transfer.file_mode`, `dir_mode`, `record_mode`, with
+    /// `world_readable` applied).
+    pub modes: mode::OutputModes,
+    /// `transfer.world_readable`.
+    pub world_readable: bool,
     /// How long completed runs stay watched.
     pub watch_completed_for: Duration,
 }
@@ -1499,23 +1513,37 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
             );
         }
     }
-    let file_mode = match u32::from_str_radix(t.file_mode.trim_start_matches("0o"), 8) {
-        Ok(m) if m <= 0o777 && m & 0o600 == 0o600 => m,
-        Ok(m) if m <= 0o777 => {
-            c.problem(
-                "transfer.file_mode",
-                format!("{m:o} must let the owner read and write (e.g. \"0640\")"),
-            );
-            0
+    let mut mode_key = |key: &str, text: &str, is_dir: bool| -> Option<mode::Mode> {
+        if text.trim().is_empty() && key != "transfer.file_mode" {
+            return None;
         }
-        _ => {
-            c.problem(
-                "transfer.file_mode",
-                format!("{:?} is not an octal mode such as \"0640\"", t.file_mode),
-            );
-            0
+        let owner = if is_dir { 0o700 } else { 0o600 };
+        match mode::Mode::parse(text) {
+            // The owner must keep access whatever the created mode was.
+            Ok(m) if m.apply(owner, is_dir) & owner == owner => Some(m),
+            Ok(m) => {
+                let what = if is_dir {
+                    "read, write and enter"
+                } else {
+                    "read and write"
+                };
+                c.problem(key, format!("{m} must let the owner {what}"));
+                None
+            }
+            Err(e) => {
+                c.problem(key, e);
+                None
+            }
         }
     };
+    let mut modes = mode::OutputModes {
+        file: mode_key("transfer.file_mode", &t.file_mode, false).unwrap_or_default(),
+        dir: mode_key("transfer.dir_mode", &t.dir_mode, true),
+        record: mode_key("transfer.record_mode", &t.record_mode, false),
+    };
+    if t.world_readable {
+        modes = modes.world_readable();
+    }
 
     // Outage.
     let o = &raw.outage;
@@ -1659,7 +1687,8 @@ pub fn validate(raw: &RawConfig, fs: &dyn Fs) -> std::result::Result<Loaded, Vec
                 max_attempts: t.max_attempts,
                 min_free,
                 preserve_mtime: t.preserve_mtime,
-                file_mode,
+                modes,
+                world_readable: t.world_readable,
                 watch_completed_for,
             },
             outage: Outage {
@@ -1878,6 +1907,14 @@ impl Config {
             (
                 "free space",
                 format!("keep {} free on the destination", Bytes(t.min_free)),
+            ),
+            (
+                "permissions",
+                if t.world_readable {
+                    format!("{} (world_readable)", t.modes.summary())
+                } else {
+                    t.modes.summary()
+                },
             ),
             (
                 "outage",

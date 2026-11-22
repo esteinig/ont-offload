@@ -142,7 +142,16 @@ pub fn offload(
         }
     }
 
-    claim_on_share(fs, guard, &dest, &run.path, &j.id, &cfg.target_id).map_err(|e| match e {
+    claim_on_share(
+        fs,
+        guard,
+        &dest,
+        &run.path,
+        &j.id,
+        &cfg.target_id,
+        &cfg.transfer.modes,
+    )
+    .map_err(|e| match e {
         CopyFail::Conflict(m) => Error::Integrity(m),
         CopyFail::Guard(e) => e,
         CopyFail::Io(e) => Error::Io(e),
@@ -157,7 +166,7 @@ pub fn offload(
             },
         )?;
     }
-    fs.create_dir_all(&dest)?;
+    copy::create_dirs(fs, &dest, cfg.transfer.modes.dir.as_ref())?;
     let removed = copy::remove_stale_temps(fs, &dest)?;
     if removed > 0 {
         log::info!("run {name}: removed {removed} stale temp file(s) from an earlier attempt");
@@ -174,7 +183,7 @@ pub fn offload(
         chunk_size: usize::try_from(cfg.transfer.chunk_size).unwrap_or(8 << 20),
         verify: cfg.transfer.verify,
         on_existing: cfg.transfer.on_existing,
-        file_mode: cfg.transfer.file_mode,
+        modes: cfg.transfer.modes.clone(),
         preserve_mtime: cfg.transfer.preserve_mtime,
         min_free: cfg.transfer.min_free,
     };
@@ -255,7 +264,7 @@ pub fn offload(
 
     // Size check of every committed file, then manifest, run.json, COMPLETE.
     let out = finalise::prepare(cfg, fs, run, &dest, &j, &sel, &started, "run")?;
-    finalise::write(fs, guard, &dest, &out)?;
+    finalise::write(fs, guard, &dest, &out, cfg.transfer.modes.record.as_ref())?;
     let manifest_sha = out.manifest_sha256;
     j.append(
         fs,

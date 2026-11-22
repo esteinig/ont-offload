@@ -58,7 +58,18 @@ min_free = "500GiB"
 # and the run is offloaded again.
 watch_completed_for = "24h"
 preserve_mtime = true
+# Modes on the share: octal ("0644") or chmod symbols ("u=rw,g=r,o=", "a+rX").
+# Copied files:
 file_mode = "0640"
+# Folders ont-offload creates; "" leaves the service umask (0027: 0750).
+dir_mode = ""
+# manifest.sha256, run.json, COMPLETE, the share claim, DELETED.json;
+# "" leaves the umask (0640).
+record_mode = ""
+# true: a+r on files and records and a+rx on folders after the modes above,
+# so any account that can reach the share reads the output. Folders that
+# already exist are left as they are.
+world_readable = false
 
 [outage]
 check_every_max = "5m"

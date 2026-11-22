@@ -372,6 +372,117 @@ fn offloaded_run_matches_the_simulator_manifest() {
     assert!(again.already_complete);
 }
 
+/// Mode bits of every folder (including `top`) and file below `top`.
+fn modes_below(top: &Path) -> (Vec<(String, u32)>, Vec<(String, u32)>) {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = |p: &Path| std::fs::symlink_metadata(p).unwrap().permissions().mode() & 0o7777;
+    let (mut dirs, mut files) = (vec![(".".to_owned(), mode(top))], Vec::new());
+    let mut stack = vec![top.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            let rel = p.strip_prefix(top).unwrap().to_string_lossy().into_owned();
+            if p.is_dir() {
+                dirs.push((rel, mode(&p)));
+                stack.push(p);
+            } else {
+                files.push((rel, mode(&p)));
+            }
+        }
+    }
+    (dirs, files)
+}
+
+/// Verifies: SRS-CPY-003
+#[test]
+fn world_readable_output_can_be_read_and_listed_by_everyone() {
+    use std::os::unix::fs::PermissionsExt;
+    // The service's umask (0027), which on its own gives 0750 and 0640.
+    let _umask = crate::fsio::UmaskGuard::set(0o027);
+    let env = Env::new();
+    let runs = env.simulate(&[("exp1", "s1")], "");
+    let cfg = env.cfg("", "[transfer]\nworld_readable = true");
+    let r = env.detected(&cfg, &runs[0]);
+    let rep = offload(&cfg, &env.fs, &env.guard(&cfg), &r, false).unwrap();
+    assert!(rep.failed.is_empty(), "{:?}", rep.failed);
+    // From the first folder ont-offload created (the experiment) down.
+    let (dirs, files) = modes_below(&env.p("share").join("exp1"));
+    assert!(dirs.len() > 3, "{dirs:?}");
+    for (d, m) in &dirs {
+        assert_eq!(*m, 0o755, "folder {d}: {m:o}");
+    }
+    for (f, m) in &files {
+        let name = f.rsplit('/').next().unwrap();
+        if [MANIFEST, RUN_JSON, COMPLETE, journal::SHARE_CLAIM].contains(&name) {
+            assert_eq!(*m, 0o644, "run record {f}: {m:o}");
+        } else {
+            assert_eq!(*m, 0o644, "copied file {f}: {m:o}");
+        }
+    }
+    assert!(files.iter().any(|(f, _)| f.ends_with(journal::SHARE_CLAIM)));
+    // The share root itself is not ont-offload's and is left alone.
+    let root = std::fs::metadata(env.p("share"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o7777;
+    std::fs::set_permissions(env.p("share"), std::fs::Permissions::from_mode(0o750)).unwrap();
+    let rx = crate::config::mode::Mode::parse("a+rx").unwrap();
+    copy::create_dirs(&RealFs, &env.p("share").join("a/b"), Some(&rx)).unwrap();
+    let after = std::fs::metadata(env.p("share"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o7777;
+    assert_eq!(after, 0o750, "existing folder unchanged (was {root:o})");
+    for d in ["share/a", "share/a/b"] {
+        let m = std::fs::metadata(env.p(d)).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(m, 0o755, "{d}: {m:o}");
+    }
+}
+
+/// Verifies: SRS-CPY-003
+#[test]
+fn output_modes_default_to_the_umask_and_follow_the_mode_keys() {
+    let _umask = crate::fsio::UmaskGuard::set(0o027);
+    let reserved = [MANIFEST, RUN_JSON, COMPLETE, journal::SHARE_CLAIM];
+    let check = |transfer: &str, file: u32, dir: u32, record: u32| {
+        let env = Env::new();
+        let runs = env.simulate(&[("exp1", "s1")], "");
+        let cfg = env.cfg("", &format!("[transfer]\n{transfer}"));
+        let r = env.detected(&cfg, &runs[0]);
+        let rep = offload(&cfg, &env.fs, &env.guard(&cfg), &r, false).unwrap();
+        assert!(rep.failed.is_empty(), "{:?}", rep.failed);
+        let (dirs, files) = modes_below(&env.p("share").join("exp1"));
+        for (d, m) in &dirs {
+            assert_eq!(*m, dir, "{transfer}: folder {d}: {m:o}");
+        }
+        for (f, m) in &files {
+            let want = if reserved.contains(&f.rsplit('/').next().unwrap()) {
+                record
+            } else {
+                file
+            };
+            assert_eq!(*m, want, "{transfer}: {f}: {m:o}");
+        }
+    };
+    // Defaults as before: file_mode 0640, the rest by the umask.
+    check("", 0o640, 0o750, 0o640);
+    // Octal and chmod symbols; relative symbols start from the umask.
+    check(
+        "file_mode = \"u=rw,g=,o=\"\ndir_mode = \"g+w\"\nrecord_mode = \"0600\"",
+        0o600,
+        0o770,
+        0o600,
+    );
+    check(
+        "file_mode = \"0660\"\ndir_mode = \"u=rwx,g=rwx,o=rx\"\nrecord_mode = \"o+r\"",
+        0o660,
+        0o775,
+        0o644,
+    );
+}
+
 /// Verifies: SRS-SEL-007
 #[test]
 fn dest_starts_at_sample_and_run_place_the_run_higher() {
@@ -644,7 +755,7 @@ fn opts(verify: config::VerifyMode) -> CopyOptions {
         chunk_size: 4096,
         verify,
         on_existing: config::OnExisting::Fail,
-        file_mode: 0o640,
+        modes: crate::config::mode::OutputModes::default(),
         preserve_mtime: true,
         min_free: 0,
     }

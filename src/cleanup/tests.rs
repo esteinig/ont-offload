@@ -616,3 +616,23 @@ fn skipped_and_other_runs_are_left_alone() {
     assert_eq!(rep.runs.len(), 1);
     assert_eq!(rep.runs[0].outcome, Outcome::WouldDelete);
 }
+
+/// Verifies: SRS-CPY-003
+#[test]
+fn deletion_record_is_readable_by_everyone_with_world_readable() {
+    use std::os::unix::fs::PermissionsExt;
+    // The service's umask: on its own the record would be 0640.
+    let _umask = crate::fsio::UmaskGuard::set(0o027);
+    let env = Env::new();
+    let cfg = env.cfg("delete = \"on\"", "world_readable = true");
+    let guard = env.guard(&cfg);
+    let (_, dest) = ready_run(&env, &cfg);
+    let rep = env.pass(&cfg, &guard, true, later(8)).run().unwrap();
+    assert_eq!(rep.count(Outcome::Deleted), 1, "{rep:?}");
+    let m = std::fs::metadata(dest.join(DELETED))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(m, 0o644, "{m:o}");
+}

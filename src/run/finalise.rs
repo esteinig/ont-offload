@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::fsio::Fs;
 use crate::guard::Guard;
 use crate::journal::{
-    self, COMPLETE, Journal, MANIFEST, RUN_JSON, manifest_line, sha256_hex, write_atomic,
+    self, COMPLETE, Journal, MANIFEST, RUN_JSON, manifest_line, sha256_hex, write_atomic_mode,
 };
 use crate::logging::escape_control;
 
@@ -100,11 +100,19 @@ pub fn prepare(
 /// `manifest.sha256`, `run.json` and `COMPLETE` last, with the guard checked
 /// before the first and the last write.
 ///
-/// Implements: SRS-VER-002, SRS-GRD-002
+/// The three files are given `record_mode` when it is set.
+///
+/// Implements: SRS-VER-002, SRS-GRD-002, SRS-CPY-003
 ///
 /// # Errors
 /// [`Error::Integrity`] for a size mismatch, [`Error::Guard`], I/O errors.
-pub fn write(fs: &dyn Fs, guard: &Guard, dest: &Path, out: &Outputs) -> Result<()> {
+pub fn write(
+    fs: &dyn Fs,
+    guard: &Guard,
+    dest: &Path,
+    out: &Outputs,
+    record_mode: Option<&crate::config::mode::Mode>,
+) -> Result<()> {
     for (rel, size) in &out.sizes {
         let target = safe_join(dest, Path::new(rel)).map_err(Error::Config)?;
         let len = fs.metadata(&target)?.len;
@@ -115,13 +123,14 @@ pub fn write(fs: &dyn Fs, guard: &Guard, dest: &Path, out: &Outputs) -> Result<(
             )));
         }
     }
+    let mode = record_mode;
     guard.check(fs)?;
-    write_atomic(fs, dest, MANIFEST, out.manifest.as_bytes())?;
-    write_atomic(fs, dest, RUN_JSON, out.run_json.as_bytes())?;
+    write_atomic_mode(fs, dest, MANIFEST, out.manifest.as_bytes(), mode)?;
+    write_atomic_mode(fs, dest, RUN_JSON, out.run_json.as_bytes(), mode)?;
     guard.check(fs)?;
     let mut complete = String::new();
     let _ = writeln!(complete, "manifest_sha256={}", out.manifest_sha256);
-    write_atomic(fs, dest, COMPLETE, complete.as_bytes())?;
+    write_atomic_mode(fs, dest, COMPLETE, complete.as_bytes(), mode)?;
     Ok(())
 }
 

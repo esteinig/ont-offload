@@ -222,21 +222,31 @@ fn work(shared: &Shared, idx: usize, job: &Job) -> Result<Done, Failure> {
         )
         .map(Done::Copied)
         .map_err(Failure::Copy),
-        Job::Finalise { dest, outputs, .. } => {
-            finalise::write(&*shared.fs, &shared.guard, dest, outputs)
-                .map(|()| Done::Finalised)
-                .map_err(Failure::Finalise)
-        }
+        Job::Finalise { dest, outputs, .. } => finalise::write(
+            &*shared.fs,
+            &shared.guard,
+            dest,
+            outputs,
+            shared.opts.modes.record.as_ref(),
+        )
+        .map(|()| Done::Finalised)
+        .map_err(Failure::Finalise),
         Job::Claim {
             run,
             dest,
             run_id,
             target_id,
-        } => {
-            crate::journal::claim_on_share(&*shared.fs, &shared.guard, dest, run, run_id, target_id)
-                .map(|()| Done::Claimed)
-                .map_err(Failure::Copy)
-        }
+        } => crate::journal::claim_on_share(
+            &*shared.fs,
+            &shared.guard,
+            dest,
+            run,
+            run_id,
+            target_id,
+            &shared.opts.modes,
+        )
+        .map(|()| Done::Claimed)
+        .map_err(Failure::Copy),
         Job::Withdraw { dest, .. } => finalise::withdraw(&*shared.fs, &shared.guard, dest)
             .map(|()| Done::Withdrawn)
             .map_err(Failure::Finalise),
@@ -273,7 +283,7 @@ impl Pool {
         workers: usize,
         fs: &Arc<dyn Fs>,
         guard: &Arc<Guard>,
-        opts: CopyOptions,
+        opts: &CopyOptions,
         rate: &Arc<RateLimiter>,
         clock: &Arc<dyn Clock>,
     ) -> std::io::Result<Self> {
@@ -287,7 +297,7 @@ impl Pool {
             let shared = Shared {
                 fs: Arc::clone(fs),
                 guard: Arc::clone(guard),
-                opts,
+                opts: opts.clone(),
                 rate: Arc::clone(rate),
                 clock: Arc::clone(clock),
                 paused: Arc::clone(&paused),

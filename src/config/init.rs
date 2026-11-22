@@ -588,6 +588,16 @@ pub fn plan(args: &InitArgs, host: &Host) -> Result<Plan> {
     for (k, v, note) in d.transfer {
         tr.set(k, quote(v), note);
     }
+    tr.set(
+        "file_mode",
+        quote("0640"),
+        "copied files; octal or chmod symbols, also dir_mode and record_mode",
+    );
+    tr.set(
+        "world_readable",
+        "false".to_owned(),
+        "true: everyone can read the output (a+r, folders a+rx)",
+    );
     sections.push(tr);
     let mut out_s = Section::new("[outage]", &[]);
     for (k, v, note) in d.outage {
@@ -1060,7 +1070,7 @@ pub fn run(args: &InitArgs, fs: &dyn Fs, host: &Host, out: &mut dyn Write) -> Re
                 &format!("sentinel, names {}", plan.target_id),
             )?;
         }
-        match guard::probe_write(&plan.share, 0o640, fs) {
+        match guard::probe_write(&plan.share, &crate::config::mode::Mode::octal(0o640), fs) {
             Ok(p) => {
                 step(
                     out,

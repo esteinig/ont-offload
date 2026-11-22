@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use sha2::{Digest, Sha256};
 
+use crate::config::mode::{Mode, OutputModes};
 use crate::config::{OnExisting, VerifyMode};
 use crate::error::Error;
 use crate::fsio::{FileKind, Fs};
@@ -53,8 +54,36 @@ pub fn is_temp_name(name: &str) -> bool {
     name.starts_with('.') && name.contains(TEMP_TAG) && name.ends_with(TEMP_SUFFIX)
 }
 
+/// Create `dir` and its missing parents on the destination. With a
+/// `mode` (`transfer.dir_mode`), each folder created here is given it;
+/// folders that already existed are left as they are.
+///
+/// Implements: SRS-CPY-003
+///
+/// # Errors
+/// I/O errors.
+pub fn create_dirs(fs: &dyn Fs, dir: &Path, mode: Option<&Mode>) -> std::io::Result<()> {
+    let Some(mode) = mode else {
+        return fs.create_dir_all(dir);
+    };
+    let mut missing = Vec::new();
+    let mut next = Some(dir);
+    while let Some(d) = next {
+        if d.as_os_str().is_empty() || fs.symlink_metadata(d).is_ok() {
+            break;
+        }
+        missing.push(d);
+        next = d.parent();
+    }
+    fs.create_dir_all(dir)?;
+    for d in missing.iter().rev() {
+        mode.set(fs, d, true)?;
+    }
+    Ok(())
+}
+
 /// Copy settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CopyOptions {
     /// Chunk size in bytes.
     pub chunk_size: usize,
@@ -62,8 +91,8 @@ pub struct CopyOptions {
     pub verify: VerifyMode,
     /// Existing destination file policy.
     pub on_existing: OnExisting,
-    /// Permission bits of committed files.
-    pub file_mode: u32,
+    /// Modes of committed files, created folders and run records.
+    pub modes: OutputModes,
     /// Copy the source modification time.
     pub preserve_mtime: bool,
     /// Free space to keep on the destination (`transfer.min_free`).
@@ -196,7 +225,7 @@ pub fn copy_file(
 /// ont-offload, which may then be replaced; any other existing file is a
 /// conflict (or, with `on_existing = "hash"`, adopted when identical).
 ///
-/// Implements: SRS-CPY-001, SRS-CPY-002, SRS-VER-001, SRS-LIVE-002, SRS-GRD-002
+/// Implements: SRS-CPY-001, SRS-CPY-002, SRS-CPY-003, SRS-VER-001, SRS-LIVE-002, SRS-GRD-002
 ///
 /// # Errors
 /// See [`CopyFail`].
@@ -249,7 +278,7 @@ pub fn copy_file_with(
     }
 
     guard.quick(fs).map_err(CopyFail::Guard)?;
-    fs.create_dir_all(parent)?;
+    create_dirs(fs, parent, opts.modes.dir.as_ref())?;
     check_free(fs, parent, s0.len, opts.min_free)?;
     let tmp = parent.join(temp_name(name));
     let result = (|| -> Result<Copied, CopyFail> {
@@ -299,7 +328,7 @@ pub fn copy_file_with(
                 )));
             }
         }
-        fs.set_mode(&tmp, opts.file_mode)?;
+        opts.modes.file.set(fs, &tmp, false)?;
         guard.check(fs).map_err(CopyFail::Guard)?;
         // A file that appeared under the final name during the copy is not ours.
         if !ours && fs.symlink_metadata(dest).is_ok() {
