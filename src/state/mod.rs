@@ -114,7 +114,8 @@ pub struct CleanupState {
 pub struct Rate {
     /// Total limit in bytes per second (`null`: unlimited).
     pub limit_bytes_per_s: Option<u64>,
-    /// Bytes per second committed over the last minute.
+    /// Bytes per second written to the share over about the last 10 s,
+    /// counted chunk by chunk as copies pass the rate limiter.
     pub current_bytes_per_s: u64,
 }
 

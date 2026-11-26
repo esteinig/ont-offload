@@ -36,6 +36,9 @@ use super::pool::{Done, Failure, Job, Outcome, Pool};
 use super::rate::RateLimiter;
 use super::{Clock, human};
 
+/// Window over which the current speed in the state snapshot is measured.
+const RATE_WINDOW: Duration = Duration::from_secs(10);
+
 /// Controller settings that are not in the configuration file.
 #[derive(Debug, Clone, Copy)]
 pub struct Options {
@@ -1557,7 +1560,6 @@ impl Watcher {
                             r.attempts.remove(&rel);
                             self.stats.committed += 1;
                             self.stats.committed_bytes += c.size;
-                            self.recent.push_back((now, c.size));
                             events.push((
                                 Kind::FileCommitted,
                                 log::Level::Info,
@@ -1830,19 +1832,42 @@ impl Watcher {
         }
     }
 
-    /// Bytes per second committed over the last minute.
+    /// Bytes per second written over about the last [`RATE_WINDOW`].
+    ///
+    /// Samples the pool's count of bytes written, which grows chunk by chunk
+    /// as copies pass the rate limiter, so a large file shows its real speed
+    /// while it is copied instead of arriving all at once when it commits.
+    /// `recent` holds `(clock reading, bytes written)` samples; the oldest
+    /// one kept is the last taken at least a window ago.
+    ///
+    /// Implements: SRS-STATE-001
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
     fn current_rate(&mut self, now: Duration) -> u64 {
-        let window = Duration::from_secs(60);
-        while self
-            .recent
-            .front()
-            .is_some_and(|(t, _)| now.saturating_sub(*t) > window)
+        let written = self.pool.written();
+        if self.recent.back().is_some_and(|(t, _)| *t > now) {
+            self.recent.clear();
+        }
+        self.recent.push_back((now, written));
+        while self.recent.len() > 2
+            && self
+                .recent
+                .get(1)
+                .is_some_and(|(t, _)| now.saturating_sub(*t) >= RATE_WINDOW)
         {
             self.recent.pop_front();
         }
-        let bytes: u64 = self.recent.iter().map(|(_, b)| b).sum();
-        let span = now.min(window).as_secs().max(1);
-        bytes / span
+        let Some(&(t0, b0)) = self.recent.front() else {
+            return 0;
+        };
+        let span = now.saturating_sub(t0).as_secs_f64();
+        if span <= 0.0 {
+            return 0;
+        }
+        (written.saturating_sub(b0) as f64 / span) as u64
     }
 
     /// The state snapshot at clock reading `now`.

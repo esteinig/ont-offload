@@ -649,6 +649,78 @@ fn stalled_worker_is_reported_and_all_workers_stalled_needs_a_restart() {
     }
 }
 
+/// The current speed counts bytes as each chunk is written, so a file
+/// that is still being copied shows up in it before it commits (a large
+/// file used to arrive all at once and spike the speed).
+///
+/// Verifies: SRS-STATE-001
+#[test]
+fn current_speed_counts_chunks_before_the_file_commits() {
+    let env = Env::new();
+    let run = one_completed_run(&env);
+    // A large file among the small ones.
+    let big = run.join("fastq_pass").join("0_big.fastq.gz");
+    std::fs::write(&big, vec![7u8; 2 << 20]).unwrap();
+    let cfg = env.cfg(
+        "",
+        "[bandwidth]\nworkers = 1\n[transfer]\nchunk_size = \"64KiB\"\n",
+    );
+    let mut w = env.watcher(cfg);
+    // Slow writes to the share, so the large file is still being copied
+    // when the speed is read.
+    env.fs.add(Rule::always(
+        Op::Write,
+        "/share",
+        Fault::Delay(Duration::from_millis(100)),
+    ));
+    let mut t = 0;
+    loop {
+        env.clock.set(s(t));
+        w.step(s(t)).unwrap();
+        let snap = w.snapshot(s(t));
+        if snap
+            .workers
+            .busy
+            .iter()
+            .any(|b| b.bytes_total == Some(2 << 20))
+        {
+            break;
+        }
+        assert!(t < 600, "the large file was never copied");
+        w.quiesce(s(t), s(10)).unwrap();
+        t += 10;
+    }
+    std::thread::sleep(Duration::from_millis(500));
+    env.clock.set(s(t + 5));
+    let snap = w.snapshot(s(t + 5));
+    let copying = snap
+        .workers
+        .busy
+        .iter()
+        .find(|b| b.bytes_total == Some(2 << 20))
+        .unwrap_or_else(|| {
+            panic!(
+                "the large file is not being copied: {:?}",
+                snap.workers.busy
+            )
+        });
+    assert!(copying.bytes > 0 && copying.bytes < 2 << 20, "{copying:?}");
+    // Only a few small files have committed; the speed over the last 5 s
+    // still counts at least one 64 KiB chunk of the large file.
+    assert!(w.stats.committed_bytes < 64 << 10, "{:?}", w.stats);
+    assert!(
+        snap.rate.current_bytes_per_s >= (64 << 10) / 5,
+        "speed {} with {copying:?}",
+        snap.rate.current_bytes_per_s
+    );
+    // Nothing written for a full window: the speed falls back to zero.
+    env.fs.clear();
+    env.base_rules();
+    w.quiesce(s(t + 5), s(20)).unwrap();
+    let _ = w.snapshot(s(t + 50));
+    assert_eq!(w.snapshot(s(t + 70)).rate.current_bytes_per_s, 0);
+}
+
 /// Verifies: SRS-RES-001, SRS-CPY-002
 #[test]
 fn errors_are_handled_by_class() {

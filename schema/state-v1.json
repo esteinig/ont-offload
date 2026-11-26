@@ -533,7 +533,7 @@
         "current_bytes_per_s": {
           "type": "integer",
           "minimum": 0,
-          "description": "Committed over the last minute."
+          "description": "Bytes per second written to the share over about the last 10 s, counted chunk by chunk."
         }
       }
     },

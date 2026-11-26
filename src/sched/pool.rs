@@ -6,7 +6,7 @@
 //! limiter and one pause flag.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -172,6 +172,7 @@ struct Shared {
     clock: Arc<dyn Clock>,
     paused: Arc<AtomicBool>,
     slots: Arc<Vec<Slot>>,
+    written: Arc<AtomicU64>,
 }
 
 struct WorkerHooks<'a> {
@@ -185,6 +186,7 @@ impl Hooks for WorkerHooks<'_> {
             return Err(CopyFail::Paused);
         }
         self.shared.rate.acquire(n as u64);
+        self.shared.written.fetch_add(n as u64, Ordering::Relaxed);
         let now = self.shared.clock.now();
         if let Some(b) = self
             .slot
@@ -261,6 +263,7 @@ pub struct Pool {
     outcomes: Receiver<Outcome>,
     slots: Arc<Vec<Slot>>,
     paused: Arc<AtomicBool>,
+    written: Arc<AtomicU64>,
     in_flight: usize,
     workers: usize,
 }
@@ -293,6 +296,7 @@ impl Pool {
         let jrx = Arc::new(Mutex::new(jrx));
         let slots: Arc<Vec<Slot>> = Arc::new((0..workers).map(|_| Mutex::new(None)).collect());
         let paused = Arc::new(AtomicBool::new(false));
+        let written = Arc::new(AtomicU64::new(0));
         for idx in 0..workers {
             let shared = Shared {
                 fs: Arc::clone(fs),
@@ -302,6 +306,7 @@ impl Pool {
                 clock: Arc::clone(clock),
                 paused: Arc::clone(&paused),
                 slots: Arc::clone(&slots),
+                written: Arc::clone(&written),
             };
             let jrx = Arc::clone(&jrx);
             let otx = otx.clone();
@@ -349,6 +354,7 @@ impl Pool {
             outcomes: orx,
             slots,
             paused,
+            written,
             in_flight: 0,
             workers,
         })
@@ -384,6 +390,14 @@ impl Pool {
     #[must_use]
     pub fn paused(&self) -> bool {
         self.paused.load(Ordering::SeqCst)
+    }
+
+    /// Bytes written by copies since the pool started, counted per chunk as
+    /// it passes the rate limiter (also chunks of copies that later fail or
+    /// are retried: they crossed the network too).
+    #[must_use]
+    pub fn written(&self) -> u64 {
+        self.written.load(Ordering::Relaxed)
     }
 
     /// The next outcome, waiting at most `timeout`.
