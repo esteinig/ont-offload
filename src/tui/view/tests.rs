@@ -187,6 +187,46 @@ fn a_run_is_complete_only_with_a_manifest_digest() {
     );
 }
 
+/// A settled run whose last files are being copied reads "copying" with
+/// its count, not "reconciling".
+///
+/// Verifies: SRS-TUI-006
+#[test]
+fn a_reconciling_run_reads_as_copying_n_of_m() {
+    let snap = normal(&at(0));
+    let mut run = snap.runs[0].clone();
+    run.phase = "reconciling".into();
+    run.files = 40;
+    run.committed_files = 36;
+    run.copying = 4;
+    let (line, sev) = run_line(&run, '#');
+    assert!(
+        line.contains("copying ") && line.contains("36/40"),
+        "{line}"
+    );
+    assert!(!line.contains("reconciling"), "{line}");
+    assert_eq!(sev, Severity::Info);
+    assert_eq!(run.phase_words(), "copying 36 of 40");
+    let pal = Pal {
+        th: ui(TuiTheme::Plain).theme,
+        live: true,
+    };
+    let detail: String = run_detail(&run, &pal, 80)
+        .iter()
+        .map(|l| {
+            l.spans
+                .iter()
+                .map(|s| s.content.as_ref())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(
+        detail.contains("copying 36 of 40 (reconciling)"),
+        "{detail}"
+    );
+}
+
 fn find(b: &Buffer, needle: &str) -> Option<(u16, u16)> {
     let first = needle.chars().next()?.to_string();
     for y in 0..b.area.height {

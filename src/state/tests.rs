@@ -319,6 +319,24 @@ fn status_text_flags_a_stale_snapshot() {
     );
 }
 
+/// A settled run whose last files are being copied reads "copying N of
+/// M" in `status`; `status --json` keeps the phase name.
+///
+/// Verifies: SRS-STATE-001
+#[test]
+fn status_text_shows_a_reconciling_run_as_copying_n_of_m() {
+    let mut snap = sample();
+    let r = &mut snap.runs[0];
+    r.phase = "reconciling".into();
+    r.files = 40;
+    r.committed_files = 36;
+    let text = describe(&snap, SystemTime::now());
+    assert!(text.contains("  copying 36 of 40 file(s), "), "{text}");
+    assert!(!text.contains("reconciling"), "{text}");
+    let json = serde_json::to_value(&snap).unwrap();
+    assert_eq!(json["runs"][0]["phase"], "reconciling");
+}
+
 /// Verifies: SRS-STATE-003
 #[cfg(unix)]
 #[test]

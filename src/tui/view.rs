@@ -756,6 +756,9 @@ fn run_status(r: &RunState) -> (Severity, String) {
         "complete".to_owned()
     } else if r.phase == "complete" {
         "complete?".to_owned()
+    } else if r.phase == "reconciling" {
+        // The count column beside it says how many of how many.
+        "copying".to_owned()
     } else {
         r.phase.clone()
     };
@@ -1299,7 +1302,11 @@ fn run_detail(r: &RunState, pal: &Pal, width: usize) -> Vec<Line<'static>> {
         pal.accent(),
     );
     d.blank();
-    d.value("phase", &phase);
+    if r.phase == "reconciling" {
+        d.value("phase", &format!("{} (reconciling)", r.phase_words()));
+    } else {
+        d.value("phase", &phase);
+    }
     d.value("run id", &r.run_id);
     if let Some(src) = &r.source_name {
         d.value("source name", src);

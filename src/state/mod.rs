@@ -285,6 +285,22 @@ pub struct RunState {
     pub error: Option<String>,
 }
 
+impl RunState {
+    /// The phase in words for people. A settled run whose last files are
+    /// still being copied (`reconciling`) reads "copying N of M", N being
+    /// the files committed; every other phase reads as its name.
+    ///
+    /// Implements: SRS-STATE-001
+    #[must_use]
+    pub fn phase_words(&self) -> String {
+        if self.phase == "reconciling" {
+            format!("copying {} of {}", self.committed_files, self.files)
+        } else {
+            self.phase.clone()
+        }
+    }
+}
+
 /// A failed file.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -867,14 +883,23 @@ pub fn describe(snap: &Snapshot, now: std::time::SystemTime) -> String {
     }
     let _ = writeln!(s, "runs: {}", snap.runs.len());
     for r in &snap.runs {
-        let mut line = format!(
-            "  {}  {}  {}/{} file(s), {}",
-            r.name,
-            r.phase,
-            r.committed_files,
-            r.files,
-            Bytes(r.bytes)
-        );
+        let mut line = if r.phase == "reconciling" {
+            format!(
+                "  {}  {} file(s), {}",
+                r.name,
+                r.phase_words(),
+                Bytes(r.bytes)
+            )
+        } else {
+            format!(
+                "  {}  {}  {}/{} file(s), {}",
+                r.name,
+                r.phase,
+                r.committed_files,
+                r.files,
+                Bytes(r.bytes)
+            )
+        };
         if r.backlog_files > 0 {
             let _ = write!(
                 line,

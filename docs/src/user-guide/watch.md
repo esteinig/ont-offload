@@ -16,7 +16,7 @@ ont-offload watch --until-idle    # exit once every detected run is complete or 
 | claiming | Before anything else, `.ont-offload-claim.json` is written into the destination run folder on the share. A folder already claimed by a different source run (another sequencer, another configuration) refuses the run: it is reported as failed and nothing of it is written. |
 | live | The run has no complete marker yet. Each file is copied once its size and modification time have not changed for `transfer.settle` (default 30 s). Files matching `selection.defer_until_complete` wait for the complete marker. |
 | settling | The complete marker (`final_summary_*.txt`) is there; waiting until nothing has changed for `transfer.settle_after_complete` (default 5 min), so late files are not missed. |
-| reconciling | Settled; the last files are being committed. A file that changed after it was copied is copied again. |
+| reconciling | Settled; the last files are being committed. A file that changed after it was copied is copied again. `status` shows it as `copying N of M` (files committed of files selected) and the dashboard as `copying`, beside its N/M count; `status --json` keeps `reconciling`. |
 | finalising | Every selected file is committed as it is now. The run folder is listed in full once more, then: size check, `manifest.sha256`, `run.json` and `COMPLETE`. |
 | complete | Done. The run stays under watch for `transfer.watch_completed_for` (default 24 h), then is forgotten. |
 | withdrawing | A completed run changed at the source. `COMPLETE` and then `VERIFIED.json` are removed from the share before anything is copied; then the run goes back to live and gets a new manifest. |
