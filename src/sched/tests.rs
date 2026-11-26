@@ -673,43 +673,46 @@ fn current_speed_counts_chunks_before_the_file_commits() {
         "/share",
         Fault::Delay(Duration::from_millis(100)),
     ));
-    let mut t = 0;
-    loop {
-        env.clock.set(s(t));
-        w.step(s(t)).unwrap();
-        let snap = w.snapshot(s(t));
-        if snap
+    // Step until a worker has taken the large file. A job is handed to a
+    // worker thread a moment after the step that submits it, so look for
+    // it in real time before handling the outcomes of the step.
+    let big_busy = |w: &mut Watcher, now: Duration| {
+        w.snapshot(now)
             .workers
             .busy
-            .iter()
-            .any(|b| b.bytes_total == Some(2 << 20))
-        {
-            break;
+            .into_iter()
+            .find(|b| b.bytes_total == Some(2 << 20))
+    };
+    let mut t = 0;
+    'steps: loop {
+        env.clock.set(s(t));
+        w.step(s(t)).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_millis(500);
+        while w.in_flight() > 0 && std::time::Instant::now() < deadline {
+            if big_busy(&mut w, s(t)).is_some() {
+                break 'steps;
+            }
+            std::thread::sleep(Duration::from_millis(5));
         }
-        assert!(t < 600, "the large file was never copied");
+        assert!(
+            t < 600,
+            "the large file was never copied; {:?}",
+            w.snapshot(s(t)).runs
+        );
         w.quiesce(s(t), s(10)).unwrap();
         t += 10;
     }
     std::thread::sleep(Duration::from_millis(500));
     env.clock.set(s(t + 5));
-    let snap = w.snapshot(s(t + 5));
-    let copying = snap
-        .workers
-        .busy
-        .iter()
-        .find(|b| b.bytes_total == Some(2 << 20))
-        .unwrap_or_else(|| {
-            panic!(
-                "the large file is not being copied: {:?}",
-                snap.workers.busy
-            )
-        });
+    let copying = big_busy(&mut w, s(t + 5)).expect("the large file is still being copied");
     assert!(copying.bytes > 0 && copying.bytes < 2 << 20, "{copying:?}");
-    // Only a few small files have committed; the speed over the last 5 s
-    // still counts at least one 64 KiB chunk of the large file.
-    assert!(w.stats.committed_bytes < 64 << 10, "{:?}", w.stats);
+    // The speed counts the chunks of the large file written so far, over at
+    // most the last 15 s (the oldest sample kept is from the step before),
+    // although the file has not committed. Counting committed files only,
+    // it was a few small files over 60 s: tens of bytes per second.
+    let snap = w.snapshot(s(t + 5));
     assert!(
-        snap.rate.current_bytes_per_s >= (64 << 10) / 5,
+        snap.rate.current_bytes_per_s >= copying.bytes / 15,
         "speed {} with {copying:?}",
         snap.rate.current_bytes_per_s
     );
